@@ -8,7 +8,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" type="image/png" href="icon-180.png">
-<title>Minhas Finanças v5</title>
+<title>Minhas Finanças v6</title>
 <style>
 :root{--bg:#f1f5f9;--card:#fff;--txt:#0f172a;--mut:#64748b;--line:#e2e8f0;--pri:#0f766e;--green:#16a34a;--yellow:#eab308;--red:#dc2626;--blue:#2563eb}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -77,6 +77,8 @@ h4{font-size:14px;margin:16px 0 8px;color:var(--mut);text-transform:uppercase;le
 .del,.ico{border:0;background:#f1f5f9;border-radius:10px;width:40px;height:40px;font-size:17px;cursor:pointer;flex-shrink:0}
 .tag{display:inline-block;font-size:11px;background:#e0f2fe;color:#0369a1;border-radius:6px;padding:1px 6px;margin-left:4px;font-weight:600}
 .tag.ag{background:#f3e8ff;color:#7e22ce}
+.tag.fat{background:#fef3c7;color:#92400e}
+.fatbox{margin-top:4px}
 .empty{color:var(--mut);text-align:center;padding:16px 0;font-size:14px}
 .chartwrap{overflow-x:auto;margin-top:12px}
 .legend{display:flex;flex-wrap:wrap;gap:12px;font-size:12px;color:var(--mut);margin-top:8px}
@@ -111,7 +113,7 @@ tr.avg td{font-weight:700;background:#f8fafc}
 <body>
 
 <header>
-  <h1>💰 Minhas Finanças <small style="font-size:11px;font-weight:600;opacity:.7">v5</small></h1>
+  <h1>💰 Minhas Finanças <small style="font-size:11px;font-weight:600;opacity:.7">v6</small></h1>
   <div id="hdrPill" class="pill"></div>
 </header>
 
@@ -134,6 +136,11 @@ tr.avg td{font-weight:700;background:#f8fafc}
       </div>
       <label class="lbl" for="dataInp">Data</label>
       <input id="dataInp" type="date" class="inp">
+      <div id="fatBox" class="fatbox" style="display:none">
+        <label class="lbl" for="fatSel">Fatura</label>
+        <select id="fatSel" class="inp"></select>
+        <p id="fatHint" class="hint"></p>
+      </div>
       <button id="btnSalvar" class="btn big">Salvar</button>
     </div>
   </section>
@@ -309,9 +316,16 @@ function migrate(d) {
   d.transactions = Array.isArray(d.transactions) ? d.transactions : [];
   d.limit = d.limit > 0 ? d.limit : 200000;
   d.fixed.forEach(f => { f.endType = f.endType || 'sempre'; f.skip = f.skip || []; });
+  if (!d.cards || typeof d.cards !== 'object') {
+    d.cards = {};
+    d.payments.forEach(p => { if (/^cr[eé]dito (ita[uú]|inter)$/i.test(p)) d.cards[p] = {fecha: 29, vence: 5}; });
+  }
+  { const old = data; data = d;
+    d.transactions.forEach(t => { if (t.type === 'gasto' && !t.fatura && !t.fixedId) { const f = faturaAuto(t.date, t.payment); if (f) t.fatura = f; } });
+    data = old; }
   d.pendingQueue = Array.isArray(d.pendingQueue) ? d.pendingQueue : [];
   d.seenIds = Array.isArray(d.seenIds) ? d.seenIds : [];
-  d.version = 5;
+  d.version = 6;
   return d;
 }
 
@@ -337,7 +351,7 @@ const catName = obj => (catById(obj.catId) || {}).name || obj.catName || 'Sem ca
 function totals(m) {
   let ent = 0, gas = 0; const byCat = {}, byId = {};
   for (const t of data.transactions) {
-    if (monthOf(t.date) !== m) continue;
+    if (mesConta(t) !== m) continue;
     if (t.type === 'entrada') ent += t.value;
     else {
       gas += t.value;
@@ -361,6 +375,30 @@ function limitStatus(gas) {
   return {...s, txt: ['Dentro do limite', 'Perto do limite', 'Passou do limite'][s.nivel]};
 }
 const saldoCor = s => s > 0 ? COR.blue : (s === 0 ? COR.yellow : COR.red);
+
+/* ================== FATURA DO CARTÃO ================== */
+// data.cards = { 'Crédito Itaú': {fecha: 29, vence: 5}, ... }
+const cardOf = pay => (pay && data.cards && data.cards[pay]) || null;
+// Compra feita ANTES do dia de fechamento entra na fatura que fecha neste mês;
+// no dia do fechamento ou depois, entra na fatura que fecha no mês seguinte.
+// O mês da fatura é o mês do VENCIMENTO.
+function faturaAuto(date, pay) {
+  const c = cardOf(pay); if (!c || !date) return null;
+  const dia = +date.slice(8, 10);
+  const mesFecha = addMonths(monthOf(date), dia < c.fecha ? 0 : 1);
+  return addMonths(mesFecha, c.vence > c.fecha ? 0 : 1);
+}
+const vencData = (fat, pay) => { const c = cardOf(pay); return c ? pad(Math.min(c.vence, lastDay(fat))) + '/' + fat.slice(5, 7) : ''; };
+// Mês em que o lançamento conta no app
+const mesConta = t => t.fatura || monthOf(t.date);
+function faturaOptions(auto, sel) {
+  let h = '';
+  for (let i = -2; i <= 2; i++) {
+    const m = addMonths(auto, i);
+    h += `<option value="${m}" ${m === sel ? 'selected' : ''}>${MESES[+m.slice(5) - 1]} de ${m.slice(0, 4)}${m === auto ? ' (automático)' : ''}</option>`;
+  }
+  return h;
+}
 
 /* ================== PREVISÃO POR CATEGORIA ================== */
 function budgetFromList(list, m) { let v = 0; for (const b of list || []) if (b.from <= m) v = b.value; return v; }
@@ -463,7 +501,6 @@ function readPendingURL() {
   }
   return itens;
 }
-// Guarda as compras recebidas na fila (ignora as que já chegaram antes)
 function receivePending() {
   const itens = readPendingURL();
   if (!itens.length) return 0;
@@ -498,7 +535,7 @@ function clearPendingURL() { history.replaceState(null, '', location.pathname); 
 
 const pend = {active: false, catId: null, payment: null, date: null};
 function showPending(p) {
-  pend.active = true; pend.catId = null; pend.payment = cardToPayment(p.cartao); pend.date = p.date || null;
+  pend.active = true; pend.catId = null; pend.payment = cardToPayment(p.cartao); pend.date = p.date || null; pend.fat = null;
   const draw = () => {
     openModal(`
       <div class="pend-head"><small>💳 Compra pela Carteira${p.cartao ? ' · ' + esc(p.cartao) : ''}${data.pendingQueue.length > 1 ? ' · 1 de ' + data.pendingQueue.length + ' pendentes' : ''}</small><b>${esc(p.loja || 'Loja não informada')}</b></div>
@@ -511,15 +548,19 @@ function showPending(p) {
       ${pend.payment ? '' : '<p class="hint" style="color:#b45309">Não reconheci o cartão. Toque na forma de pagamento.</p>'}
       <label class="lbl">Data</label>
       <input id="pdDate" type="date" class="inp" value="${pend.date || todayISO()}">
+      ${(() => { const auto = faturaAuto(pend.date || todayISO(), pend.payment); if (!auto) return ''; const sel = pend.fat || auto;
+        return `<label class="lbl">Fatura</label><select id="pdFat" class="inp">${faturaOptions(auto, sel)}</select>
+        <p class="hint">${pend.fat && pend.fat !== auto ? '<b style="color:#b45309">Alterada por você.</b> ' : 'Calculada pelo fechamento no dia ' + cardOf(pend.payment).fecha + '. '}Vence em ${vencData(sel, pend.payment)}.</p>`; })()}
       <div class="row" style="margin-top:20px">
         <button class="btn gray" style="flex:1" id="pdDiscard">❌ Descartar</button>
         <button class="btn" style="flex:1;background:${COR.green}" id="pdApprove" ${pend.catId && pend.payment ? '' : 'disabled'}>✅ Aprovar</button>
       </div>
       ${pend.catId ? '' : '<p class="hint" style="text-align:center">Escolha a categoria para aprovar.</p>'}`);
     $('pdVal').addEventListener('input', e => { e.target.value = e.target.value.replace(/[^\d.,]/g, ''); p.value = parseMoney(e.target.value); });
-    $('pdDate').addEventListener('change', e => { pend.date = e.target.value; });
+    $('pdDate').addEventListener('change', e => { pend.date = e.target.value; pend.fat = null; p.value = parseMoney($('pdVal').value); draw(); });
+    if ($('pdFat')) $('pdFat').addEventListener('change', e => { pend.fat = e.target.value; p.value = parseMoney($('pdVal').value); draw(); });
     $('pdCats').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; pend.catId = b.dataset.pcat; draw(); });
-    $('pdPays').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; pend.payment = b.dataset.ppay; draw(); });
+    $('pdPays').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; pend.payment = b.dataset.ppay; pend.fat = null; draw(); });
     $('pdDiscard').onclick = () => {
       if (!confirm('Descartar esta compra? Ela não será registrada.')) return;
       markSeen(p.id); save();
@@ -530,14 +571,16 @@ function showPending(p) {
       if (value <= 0) return toast('Confira o valor');
       if (!pend.catId) return toast('Escolha a categoria');
       if (!pend.payment) return toast('Escolha a forma de pagamento');
-      const date = $('pdDate').value || todayISO(), m = monthOf(date), before = snap(m), cat = catById(pend.catId);
+      const date = $('pdDate').value || todayISO(), auto = faturaAuto(date, pend.payment), fat = auto ? (pend.fat || auto) : null;
+      const m = fat || monthOf(date), before = snap(m), cat = catById(pend.catId);
       const t = {id: uid(), type: 'gasto', value, catId: cat.id, catName: cat.name, date, payment: pend.payment};
+      if (fat) t.fatura = fat;
       if (p.loja) t.desc = p.loja;
       data.transactions.push(t);
       markSeen(p.id);
       if (!save()) return;
       pend.active = false; pend.date = null; closeModal(); renderAll();
-      toast('Compra de ' + fmt(value) + ' aprovada ✔');
+      toast('Compra de ' + fmt(value) + ' aprovada ✔' + (fat ? ' · fatura de ' + MESES[+fat.slice(5) - 1] : ''));
       checkAlerts(m, before);
     };
   };
@@ -545,7 +588,7 @@ function showPending(p) {
 }
 
 /* ================== ESTADO DA TELA ================== */
-const state = {type: 'gasto', catId: null, payment: null, viewMonth: curMonth(), histN: 3};
+const state = {type: 'gasto', catId: null, payment: null, viewMonth: curMonth(), histN: 3, fatManual: null};
 
 /* ================== TELA: LANÇAR ================== */
 function renderLimitBox(el, m) {
@@ -571,7 +614,7 @@ function renderHeader() {
 function renderCatHint() {
   const el = $('catHint');
   if (state.type !== 'gasto' || !state.catId) { el.innerHTML = ''; return; }
-  const m = monthOf($('dataInp').value || todayISO());
+  const m = faturaLanc() || monthOf($('dataInp').value || todayISO());
   const alvo = budgetOf(state.catId, m);
   if (alvo <= 0) { el.innerHTML = ''; return; }
   const g = totals(m).byId[state.catId] || 0, st = statusOf(g, alvo), r = alvo - g;
@@ -588,6 +631,7 @@ function renderLancar() {
   $('payBox').style.display = state.type === 'gasto' ? '' : 'none';
   if (!pays().includes(state.payment)) state.payment = pays()[0];
   $('payChips').innerHTML = pays().map(p => `<button data-pay="${esc(p)}" class="${p === state.payment ? 'on' : ''}">${esc(p)}</button>`).join('');
+  renderFatura();
   $('btnSalvar').textContent = state.type === 'gasto' ? 'Salvar gasto' : 'Salvar entrada';
   $('btnSalvar').style.background = state.type === 'gasto' ? COR.red : COR.green;
 }
@@ -597,24 +641,42 @@ function salvarLancamento() {
   if (value <= 0) { toast('Digite o valor'); $('valor').focus(); return; }
   if (!state.catId) { toast('Toque em uma categoria'); return; }
   const date = $('dataInp').value || todayISO();
-  const m = monthOf(date);
+  const fat = faturaLanc();
+  const m = fat || monthOf(date);
   const before = snap(m);
   const cat = catById(state.catId);
   const t = {id: uid(), type: state.type, value, catId: cat.id, catName: cat.name, date};
   if (state.type === 'gasto') t.payment = state.payment;
+  if (fat) t.fatura = fat;
   data.transactions.push(t);
   if (!save()) return;
-  toast((state.type === 'gasto' ? 'Gasto' : 'Entrada') + ' de ' + fmt(value) + ' salvo ✔');
-  $('valor').value = ''; state.catId = null; $('dataInp').value = todayISO();
+  toast((state.type === 'gasto' ? 'Gasto' : 'Entrada') + ' de ' + fmt(value) + ' salvo ✔' + (fat ? ' · fatura de ' + MESES[+fat.slice(5) - 1] : ''));
+  $('valor').value = ''; state.catId = null; $('dataInp').value = todayISO(); state.fatManual = null;
   renderAll();
   if (state.type === 'gasto') checkAlerts(m, before);
+}
+
+function faturaLanc() {
+  if (state.type !== 'gasto') return null;
+  const auto = faturaAuto($('dataInp').value || todayISO(), state.payment);
+  return auto ? (state.fatManual || auto) : null;
+}
+function renderFatura() {
+  const date = $('dataInp').value || todayISO(), auto = state.type === 'gasto' ? faturaAuto(date, state.payment) : null;
+  if (!auto) { $('fatBox').style.display = 'none'; return; }
+  const sel = state.fatManual || auto, c = cardOf(state.payment);
+  $('fatBox').style.display = '';
+  $('fatSel').innerHTML = faturaOptions(auto, sel);
+  $('fatHint').innerHTML = (state.fatManual && state.fatManual !== auto
+    ? '<b style="color:#b45309">Alterada por você.</b> '
+    : `Calculada pelo fechamento no dia ${c.fecha}. `) + `Vence em ${vencData(sel, state.payment)}. Conta nos gastos de <b>${MESES[+sel.slice(5) - 1]}</b>.`;
 }
 
 /* ================== TELA: MÊS ================== */
 function renderMes() {
   const m = state.viewMonth, cm = curMonth();
   $('mLabel').textContent = monthLabel(m);
-  $('mFuture').innerHTML = m > cm ? '<div class="future">🔮 <b>Mês futuro.</b> Aparecem aqui os gastos fixos já agendados e o que você lançar com data deste mês.</div>' : '';
+  $('mFuture').innerHTML = m > cm ? '<div class="future">🔮 <b>Mês futuro.</b> Aparecem aqui os gastos fixos já agendados, o que você lançar com data deste mês e as compras no crédito cuja fatura vence neste mês.</div>' : '';
   const {ent, gas, saldo, byCat, byId} = totals(m);
   $('mCards').innerHTML = `
     <div class="mini"><small>Entradas</small><b class="pos">${fmt(ent)}</b></div>
@@ -654,11 +716,11 @@ function renderMes() {
   $('mCatChart').innerHTML = html;
 
   const today = todayISO();
-  const list = data.transactions.filter(t => monthOf(t.date) === m).sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
+  const list = data.transactions.filter(t => mesConta(t) === m).sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
   $('mList').innerHTML = list.length ? list.map(t => `
     <div class="tx">
       <div class="txl"><b>${esc(catName(t))}${t.fixedId ? '<span class="tag">fixo</span>' : ''}${t.date > today ? '<span class="tag ag">agendado</span>' : ''}</b>
-        <small>${brDate(t.date)}${t.payment ? ' · ' + esc(t.payment) : ''}${t.desc ? ' · ' + esc(t.desc) : ''}</small></div>
+        <small>${t.fatura ? 'Compra ' : ''}${brDate(t.date)}${t.payment ? ' · ' + esc(t.payment) : ''}${t.fatura ? ' · <span class="tag fat">fatura ' + monthShort(t.fatura) + '</span>' : ''}${t.desc ? ' · ' + esc(t.desc) : ''}</small></div>
       <div class="txv ${t.type === 'entrada' ? 'pos' : 'neg'}">${t.type === 'entrada' ? '+ ' : '− '}${fmt(t.value)}</div>
       <button class="del" data-del="${t.id}" aria-label="Apagar">🗑️</button>
     </div>`).join('') : '<div class="empty">Nenhum lançamento neste mês.</div>';
@@ -677,7 +739,7 @@ function apagarLancamento(id) {
 /* ================== TELA: HISTÓRICO ================== */
 function histMonths() {
   const cm = curMonth();
-  const first = data.transactions.reduce((mn, t) => monthOf(t.date) < mn ? monthOf(t.date) : mn, cm);
+  const first = data.transactions.reduce((mn, t) => mesConta(t) < mn ? mesConta(t) : mn, cm);
   const arr = [];
   for (let i = state.histN; i >= 1; i--) { const m = addMonths(cm, -i); if (m >= first) arr.push(m); }
   arr.push(cm);
@@ -762,7 +824,8 @@ function renderAjustes() {
       <button class="ico" data-delfix="${f.id}" aria-label="Apagar">🗑️</button>
     </div>`).join('') : '<div class="empty">Nenhum gasto fixo cadastrado.</div>';
   $('payList').innerHTML = pays().map((p, i) => `
-    <div class="item"><div class="n">${esc(p)}</div>
+    <div class="item"><div class="n">${esc(p)}<br><small class="hint" style="margin:0">${cardOf(p) ? '💳 Fecha dia ' + cardOf(p).fecha + ' · vence dia ' + cardOf(p).vence : 'Sem fatura (conta no dia do gasto)'}</small></div>
+      <button class="ico" data-cardpay="${i}" aria-label="Fatura do cartão">💳</button>
       <button class="ico" data-renpay="${i}" aria-label="Renomear">✏️</button>
       <button class="ico" data-delpay="${i}" aria-label="Apagar">🗑️</button></div>`).join('');
   const catItems = type => catsOf(type).map(c => `
@@ -876,12 +939,31 @@ function criarPagamento() {
   if (pays().some(p => p.toLowerCase() === name.toLowerCase())) return toast('Essa forma de pagamento já existe');
   data.payments.push(name); save(); $('newPay').value = ''; renderAll(); toast('Forma de pagamento criada');
 }
+function configurarCartao(i) {
+  const p = pays()[i]; if (p == null) return;
+  const c = cardOf(p);
+  const f = prompt(`${p}\n\nDia de FECHAMENTO da fatura (1 a 31).\nDeixe vazio se não for cartão de crédito.`, c ? c.fecha : '');
+  if (f === null) return;
+  if (!f.trim()) {
+    if (c && !confirm(`Tirar a fatura de "${p}"?\n\nAs próximas compras vão contar no dia do gasto. As já lançadas não mudam.`)) return;
+    delete data.cards[p]; save(); renderAll(); toast('Sem fatura: conta no dia do gasto'); return;
+  }
+  const fe = parseInt(f, 10);
+  if (!(fe >= 1 && fe <= 31)) return toast('Dia de fechamento inválido');
+  const v = prompt(`${p}\n\nDia de VENCIMENTO da fatura (1 a 31).`, c ? c.vence : '');
+  if (v === null) return;
+  const ve = parseInt(v, 10);
+  if (!(ve >= 1 && ve <= 31)) return toast('Dia de vencimento inválido');
+  data.cards[p] = {fecha: fe, vence: ve}; save(); renderAll();
+  toast('Fatura salva. Vale para as próximas compras.');
+}
 function renomearPagamento(i) {
   const old = pays()[i]; if (old == null) return;
   const name = (prompt('Novo nome para a forma de pagamento:', old) || '').trim();
   if (!name || name === old) return;
   if (pays().some((p, j) => j !== i && p.toLowerCase() === name.toLowerCase())) return toast('Essa forma de pagamento já existe');
   data.payments[i] = name;
+  if (data.cards[old]) { data.cards[name] = data.cards[old]; delete data.cards[old]; }
   data.transactions.forEach(t => { if (t.payment === old) t.payment = name; });
   data.fixed.forEach(f => { if (f.payment === old) f.payment = name; });
   if (state.payment === old) state.payment = name;
@@ -897,6 +979,7 @@ function apagarPagamento(i) {
   if (fixos) msg += `\n\n${fixos} gasto(s) fixo(s) usam essa forma e continuam lançando. Edite-os depois para escolher outra.`;
   if (!confirm(msg)) return;
   data.payments.splice(i, 1);
+  delete data.cards[p];
   save(); renderAll(); toast('Forma de pagamento apagada');
 }
 
@@ -932,7 +1015,7 @@ function apagarCategoria(id) {
 }
 
 /* ================== BACKUP (CSV que abre no Excel) ================== */
-const HEADER = ['Registro','Data','Tipo','Categoria','Valor','Pagamento','Descrição','Dia do mês','ID','ID Categoria','ID Fixo','Fim','Último mês','Parcelas','Meses pulados'];
+const HEADER = ['Registro','Data','Tipo','Categoria','Valor','Pagamento','Descrição','Dia do mês','ID','ID Categoria','ID Fixo','Fim','Último mês','Parcelas','Meses pulados','Fatura','Vencimento'];
 const csvCell = v => { v = v == null ? '' : String(v); return /[";\r\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
 const tipoLabel = t => t === 'entrada' ? 'Entrada' : 'Gasto';
 const tipoParse = s => /^e/i.test(s) ? 'entrada' : 'gasto';
@@ -940,16 +1023,17 @@ const blank = n => Array(n).fill('');
 
 function exportar() {
   const rows = [HEADER];
-  rows.push(['CONFIG', '', '', '', centsToBR(data.limit), '', 'Limite mensal', ...blank(8)]);
-  data.payments.forEach(p => rows.push(['PAGAMENTO', '', '', '', '', p, ...blank(9)]));
-  data.categories.forEach(c => rows.push(['CATEGORIA', '', tipoLabel(c.type), c.name, '', '', '', '', c.id, ...blank(6)]));
+  rows.push(['CONFIG', '', '', '', centsToBR(data.limit), '', 'Limite mensal', ...blank(10)]);
+  data.payments.forEach(p => rows.push(['PAGAMENTO', '', '', '', '', p, ...blank(11)]));
+  Object.entries(data.cards).forEach(([p, c]) => rows.push(['CARTAO', '', '', '', '', p, '', c.fecha, ...blank(8), c.vence]));
+  data.categories.forEach(c => rows.push(['CATEGORIA', '', tipoLabel(c.type), c.name, '', '', '', '', c.id, ...blank(8)]));
   Object.entries(data.budgets).forEach(([cid, list]) => list.forEach(b =>
-    rows.push(['PREVISAO', b.from, 'Gasto', (catById(cid) || {}).name || '', centsToBR(b.value), '', '', '', '', cid, ...blank(5)])));
+    rows.push(['PREVISAO', b.from, 'Gasto', (catById(cid) || {}).name || '', centsToBR(b.value), '', '', '', '', cid, ...blank(7)])));
   data.fixed.forEach(f => rows.push(['FIXO', f.start, 'Gasto', f.catName || catName(f), centsToBR(f.value), f.payment, f.name, f.day, f.id, f.catId || '', '',
-    f.endType, f.endMonth || '', f.parcelas || '', (f.skip || []).join(' ')]));
-  Object.entries(data.fixedApplied).forEach(([fid, ms]) => ms.forEach(m => rows.push(['FIXO_LANCADO', m, '', '', '', '', '', '', '', '', fid, ...blank(4)])));
+    f.endType, f.endMonth || '', f.parcelas || '', (f.skip || []).join(' '), '', '']));
+  Object.entries(data.fixedApplied).forEach(([fid, ms]) => ms.forEach(m => rows.push(['FIXO_LANCADO', m, '', '', '', '', '', '', '', '', fid, ...blank(6)])));
   data.transactions.slice().sort((a, b) => a.date.localeCompare(b.date)).forEach(t =>
-    rows.push(['LANCAMENTO', brDate(t.date), tipoLabel(t.type), catName(t), centsToBR(t.value), t.payment || '', t.desc || '', '', t.id, t.catId || '', t.fixedId || '', ...blank(4)]));
+    rows.push(['LANCAMENTO', brDate(t.date), tipoLabel(t.type), catName(t), centsToBR(t.value), t.payment || '', t.desc || '', '', t.id, t.catId || '', t.fixedId || '', ...blank(4), t.fatura || '', '']));
   const csv = '\uFEFF' + rows.map(r => r.map(csvCell).join(';')).join('\r\n');
   const blob = new Blob([csv], {type: 'text/csv;charset=utf-8'});
   const a = document.createElement('a');
@@ -998,8 +1082,9 @@ function importar(file) {
       const nd = {version: 4, limit: data.limit, payments: [], categories: [], transactions: [], fixed: [], fixedApplied: {}, budgets: {}, lastBackup: data.lastBackup, pendingQueue: data.pendingQueue, seenIds: data.seenIds};
       let ignoradas = 0; const pendT = [], prevs = [];
       for (const r of rows.slice(1)) {
-        const [reg, dt, tp, cat, val, pay, desc, day, id, catId, fixId, endT, endM, parc, skip] = HEADER.map((_, i) => (r[i] || '').trim());
+        const [reg, dt, tp, cat, val, pay, desc, day, id, catId, fixId, endT, endM, parc, skip, fatCol, venCol] = HEADER.map((_, i) => (r[i] || '').trim());
         if (reg === 'CONFIG') { const v = parseMoney(val); if (v > 0) nd.limit = v; }
+        else if (reg === 'CARTAO' && pay) { const fe = parseInt(day, 10), ve = parseInt(venCol, 10); if (fe >= 1 && fe <= 31 && ve >= 1 && ve <= 31) { nd.cards = nd.cards || {}; nd.cards[pay] = {fecha: fe, vence: ve}; } }
         else if (reg === 'PAGAMENTO' && pay) { if (!nd.payments.includes(pay)) nd.payments.push(pay); }
         else if (reg === 'CATEGORIA' && cat) nd.categories.push({id: id || uid(), name: cat, type: tipoParse(tp)});
         else if (reg === 'PREVISAO') { const from = parseMonth(dt); if (from) prevs.push({catId, catName: cat, from, value: parseMoney(val)}); else ignoradas++; }
@@ -1021,6 +1106,7 @@ function importar(file) {
           if (t.type === 'gasto') t.payment = pay || 'Pix';
           if (desc) t.desc = desc;
           if (fixId) t.fixedId = fixId;
+          if (parseMonth(fatCol)) t.fatura = parseMonth(fatCol);
           pendT.push(t);
         }
         else if (reg) ignoradas++;
@@ -1040,6 +1126,7 @@ function importar(file) {
         (ignoradas ? `\n\n(${ignoradas} linha(s) com problema foram ignoradas)` : '') +
         `\n\nIsso vai SUBSTITUIR todos os dados atuais do app. Continuar?`;
       if (!confirm(msg)) return;
+      nd.pendingQueue = data.pendingQueue; nd.seenIds = data.seenIds;
       data = migrate(nd); save(); applyFixed(); state.viewMonth = curMonth(); renderAll(); toast('Backup restaurado ✔');
     } catch (e) { alert('Não consegui importar: ' + e.message); }
   };
@@ -1064,8 +1151,9 @@ function renderAll() { renderHeader(); renderLancar(); renderMes(); renderHist()
 document.querySelector('.tabbar').addEventListener('click', e => { const b = e.target.closest('button'); if (b) showTab(b.dataset.tab); });
 $('typeSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; state.type = b.dataset.type; state.catId = null; renderLancar(); $('valor').focus(); });
 $('catGrid').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; state.catId = b.dataset.cat; renderLancar(); });
-$('payChips').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; state.payment = b.dataset.pay; renderLancar(); });
-$('dataInp').addEventListener('change', renderCatHint);
+$('payChips').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; state.payment = b.dataset.pay; state.fatManual = null; renderLancar(); });
+$('dataInp').addEventListener('change', () => { state.fatManual = null; renderFatura(); renderCatHint(); });
+$('fatSel').addEventListener('change', e => { state.fatManual = e.target.value; renderFatura(); renderCatHint(); });
 $('valor').addEventListener('input', e => { e.target.value = e.target.value.replace(/[^\d.,]/g, ''); });
 $('btnSalvar').addEventListener('click', salvarLancamento);
 $('mPrev').addEventListener('click', () => { state.viewMonth = addMonths(state.viewMonth, -1); renderMes(); });
@@ -1085,6 +1173,7 @@ $('tab-ajustes').addEventListener('click', e => {
   else if (t.dataset.delcat) apagarCategoria(t.dataset.delcat);
   else if (t.dataset.addcat) criarCategoria(t.dataset.addcat);
   else if (t.dataset.addpay) criarPagamento();
+  else if (t.dataset.cardpay) configurarCartao(+t.dataset.cardpay);
   else if (t.dataset.renpay) renomearPagamento(+t.dataset.renpay);
   else if (t.dataset.delpay) apagarPagamento(+t.dataset.delpay);
 });
