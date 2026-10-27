@@ -8,7 +8,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" type="image/png" href="icon-180.png">
-<title>Minhas Finanças v4</title>
+<title>Minhas Finanças v5</title>
 <style>
 :root{--bg:#f1f5f9;--card:#fff;--txt:#0f172a;--mut:#64748b;--line:#e2e8f0;--pri:#0f766e;--green:#16a34a;--yellow:#eab308;--red:#dc2626;--blue:#2563eb}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -111,7 +111,7 @@ tr.avg td{font-weight:700;background:#f8fafc}
 <body>
 
 <header>
-  <h1>💰 Minhas Finanças <small style="font-size:11px;font-weight:600;opacity:.7">v4</small></h1>
+  <h1>💰 Minhas Finanças <small style="font-size:11px;font-weight:600;opacity:.7">v5</small></h1>
   <div id="hdrPill" class="pill"></div>
 </header>
 
@@ -309,7 +309,9 @@ function migrate(d) {
   d.transactions = Array.isArray(d.transactions) ? d.transactions : [];
   d.limit = d.limit > 0 ? d.limit : 200000;
   d.fixed.forEach(f => { f.endType = f.endType || 'sempre'; f.skip = f.skip || []; });
-  d.version = 4;
+  d.pendingQueue = Array.isArray(d.pendingQueue) ? d.pendingQueue : [];
+  d.seenIds = Array.isArray(d.seenIds) ? d.seenIds : [];
+  d.version = 5;
   return d;
 }
 
@@ -441,13 +443,47 @@ function clearFixedFrom(f, fromMonth) {
 const hasFixedIn = (f, m) => data.transactions.some(t => t.fixedId === f.id && monthOf(t.date) === m);
 
 /* ================== COMPRA PENDENTE (Carteira do iPhone) ================== */
-// O atalho abre: .../financas/?c=VALOR;;LOJA;;CARTÃO
-function readPending() {
+// Formato antigo:  ?c=VALOR;;LOJA;;CARTÃO            (uma compra, na hora)
+// Formato novo:    ?f=ID;;VALOR;;LOJA;;CARTÃO;;DATA   (uma ou mais compras guardadas, uma por linha)
+function readPendingURL() {
   const q = new URLSearchParams(location.search);
+  const itens = [];
   const c = q.get('c');
-  if (c == null) return null;
-  const [v, loja, cartao] = c.split(';;');
-  return {value: parseMoney(v), loja: (loja || '').trim(), cartao: (cartao || '').trim()};
+  if (c != null) {
+    const [v, loja, cartao] = c.split(';;');
+    itens.push({id: 'c' + uid(), value: parseMoney(v), loja: (loja || '').trim(), cartao: (cartao || '').trim(), date: todayISO()});
+  }
+  const f = q.get('f');
+  if (f != null) {
+    for (const linha of f.split(/\r?\n|\|\|/)) {
+      if (!linha.trim()) continue;
+      const [id, v, loja, cartao, dt] = linha.split(';;').map(x => (x || '').trim());
+      itens.push({id: id || 'f' + uid(), value: parseMoney(v), loja, cartao, date: parseDate(dt) || todayISO()});
+    }
+  }
+  return itens;
+}
+// Guarda as compras recebidas na fila (ignora as que já chegaram antes)
+function receivePending() {
+  const itens = readPendingURL();
+  if (!itens.length) return 0;
+  let novos = 0;
+  for (const it of itens) {
+    if (data.seenIds.includes(it.id) || data.pendingQueue.some(x => x.id === it.id)) continue;
+    data.pendingQueue.push(it); novos++;
+  }
+  save();
+  clearPendingURL();
+  return novos;
+}
+function markSeen(id) {
+  data.pendingQueue = data.pendingQueue.filter(x => x.id !== id);
+  data.seenIds.push(id);
+  if (data.seenIds.length > 500) data.seenIds = data.seenIds.slice(-500);
+}
+function nextPending() {
+  if (pend.active || !data.pendingQueue.length || !$('modal').classList.contains('hidden')) return;
+  showPending(data.pendingQueue[0]);
 }
 function cardToPayment(cartao) {
   const n = semAcento(cartao);
@@ -462,10 +498,10 @@ function clearPendingURL() { history.replaceState(null, '', location.pathname); 
 
 const pend = {active: false, catId: null, payment: null, date: null};
 function showPending(p) {
-  pend.active = true; pend.catId = null; pend.payment = cardToPayment(p.cartao); pend.date = null;
+  pend.active = true; pend.catId = null; pend.payment = cardToPayment(p.cartao); pend.date = p.date || null;
   const draw = () => {
     openModal(`
-      <div class="pend-head"><small>💳 Compra pela Carteira${p.cartao ? ' · ' + esc(p.cartao) : ''}</small><b>${esc(p.loja || 'Loja não informada')}</b></div>
+      <div class="pend-head"><small>💳 Compra pela Carteira${p.cartao ? ' · ' + esc(p.cartao) : ''}${data.pendingQueue.length > 1 ? ' · 1 de ' + data.pendingQueue.length + ' pendentes' : ''}</small><b>${esc(p.loja || 'Loja não informada')}</b></div>
       <label class="lbl">Valor (confira)</label>
       <div class="valwrap small"><span>R$</span><input id="pdVal" inputmode="decimal" value="${p.value ? centsToBR(p.value) : ''}" placeholder="0,00" autocomplete="off"></div>
       <label class="lbl">Categoria</label>
@@ -485,7 +521,9 @@ function showPending(p) {
     $('pdCats').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; pend.catId = b.dataset.pcat; draw(); });
     $('pdPays').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; pend.payment = b.dataset.ppay; draw(); });
     $('pdDiscard').onclick = () => {
-      pend.active = false; pend.date = null; clearPendingURL(); closeModal(); toast('Compra descartada. Nada foi registrado.');
+      if (!confirm('Descartar esta compra? Ela não será registrada.')) return;
+      markSeen(p.id); save();
+      pend.active = false; pend.date = null; closeModal(); toast('Compra descartada. Nada foi registrado.');
     };
     $('pdApprove').onclick = () => {
       const value = parseMoney($('pdVal').value);
@@ -496,8 +534,9 @@ function showPending(p) {
       const t = {id: uid(), type: 'gasto', value, catId: cat.id, catName: cat.name, date, payment: pend.payment};
       if (p.loja) t.desc = p.loja;
       data.transactions.push(t);
+      markSeen(p.id);
       if (!save()) return;
-      pend.active = false; pend.date = null; clearPendingURL(); closeModal(); renderAll();
+      pend.active = false; pend.date = null; closeModal(); renderAll();
       toast('Compra de ' + fmt(value) + ' aprovada ✔');
       checkAlerts(m, before);
     };
@@ -956,7 +995,7 @@ function importar(file) {
     try {
       const rows = parseCSV(reader.result).filter(r => r.some(c => c.trim() !== ''));
       if (!rows.length || rows[0][0].trim() !== 'Registro') throw new Error('Este arquivo não parece ser um backup deste app.');
-      const nd = {version: 4, limit: data.limit, payments: [], categories: [], transactions: [], fixed: [], fixedApplied: {}, budgets: {}, lastBackup: data.lastBackup};
+      const nd = {version: 4, limit: data.limit, payments: [], categories: [], transactions: [], fixed: [], fixedApplied: {}, budgets: {}, lastBackup: data.lastBackup, pendingQueue: data.pendingQueue, seenIds: data.seenIds};
       let ignoradas = 0; const pendT = [], prevs = [];
       for (const r of rows.slice(1)) {
         const [reg, dt, tp, cat, val, pay, desc, day, id, catId, fixId, endT, endM, parc, skip] = HEADER.map((_, i) => (r[i] || '').trim());
@@ -1010,7 +1049,7 @@ function importar(file) {
 
 /* ================== MODAL E NAVEGAÇÃO ================== */
 function openModal(html) { $('modalBody').innerHTML = html; $('modal').classList.remove('hidden'); }
-function closeModal() { $('modal').classList.add('hidden'); }
+function closeModal() { $('modal').classList.add('hidden'); if (!pend.active && data.pendingQueue.length) setTimeout(nextPending, 300); }
 $('modal').addEventListener('click', e => { if (e.target.id === 'modal' && !pend.active) closeModal(); });
 
 function showTab(name) {
@@ -1051,7 +1090,7 @@ $('tab-ajustes').addEventListener('click', e => {
 });
 $('btnExport').addEventListener('click', exportar);
 $('fileImp').addEventListener('change', e => { const f = e.target.files[0]; if (f) importar(f); e.target.value = ''; });
-document.addEventListener('visibilitychange', () => { if (!document.hidden && !pend.active) { applyFixed(); renderAll(); } });
+document.addEventListener('visibilitychange', () => { if (!document.hidden && !pend.active) { applyFixed(); renderAll(); nextPending(); } });
 
 /* ================== INÍCIO ================== */
 load();
@@ -1060,8 +1099,8 @@ if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.
 $('dataInp').value = todayISO();
 applyFixed();
 renderAll();
-const pendente = readPending();
-if (pendente) showPending(pendente);
+receivePending();
+nextPending();
 </script>
 </body>
 </html>
