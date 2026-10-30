@@ -8,7 +8,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" type="image/png" href="icon-180.png">
-<title>Minhas Finanças v6</title>
+<title>Minhas Finanças v7</title>
 <style>
 :root{--bg:#f1f5f9;--card:#fff;--txt:#0f172a;--mut:#64748b;--line:#e2e8f0;--pri:#0f766e;--green:#16a34a;--yellow:#eab308;--red:#dc2626;--blue:#2563eb}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -113,7 +113,7 @@ tr.avg td{font-weight:700;background:#f8fafc}
 <body>
 
 <header>
-  <h1>💰 Minhas Finanças <small style="font-size:11px;font-weight:600;opacity:.7">v6</small></h1>
+  <h1>💰 Minhas Finanças <small style="font-size:11px;font-weight:600;opacity:.7">v7</small></h1>
   <div id="hdrPill" class="pill"></div>
 </header>
 
@@ -308,6 +308,7 @@ function defaultData() {
 }
 
 function migrate(d) {
+  const verAnt = d.version || 0;
   d.budgets = d.budgets || {};
   if (!Array.isArray(d.payments) || !d.payments.length) d.payments = DEFAULT_PAYMENTS.slice();
   d.fixedApplied = d.fixedApplied || {};
@@ -321,11 +322,18 @@ function migrate(d) {
     d.payments.forEach(p => { if (/^cr[eé]dito (ita[uú]|inter)$/i.test(p)) d.cards[p] = {fecha: 29, vence: 5}; });
   }
   { const old = data; data = d;
+    if (verAnt < 7) d.transactions.forEach(t => {
+      if (t.type !== 'gasto' || !t.fatura) return;
+      const c = cardOf(t.payment); if (!c) return;
+      const off = c.vence > c.fecha ? 0 : 1;
+      const autoAntigo = addMonths(addMonths(monthOf(t.date), +t.date.slice(8, 10) < c.fecha ? 0 : 1), off);
+      t.fatura = t.fatura === autoAntigo ? faturaAuto(t.date, t.payment) : addMonths(t.fatura, -off);
+    });
     d.transactions.forEach(t => { if (t.type === 'gasto' && !t.fatura && !t.fixedId) { const f = faturaAuto(t.date, t.payment); if (f) t.fatura = f; } });
     data = old; }
   d.pendingQueue = Array.isArray(d.pendingQueue) ? d.pendingQueue : [];
   d.seenIds = Array.isArray(d.seenIds) ? d.seenIds : [];
-  d.version = 6;
+  d.version = 7;
   return d;
 }
 
@@ -379,23 +387,23 @@ const saldoCor = s => s > 0 ? COR.blue : (s === 0 ? COR.yellow : COR.red);
 /* ================== FATURA DO CARTÃO ================== */
 // data.cards = { 'Crédito Itaú': {fecha: 29, vence: 5}, ... }
 const cardOf = pay => (pay && data.cards && data.cards[pay]) || null;
-// Compra feita ANTES do dia de fechamento entra na fatura que fecha neste mês;
-// no dia do fechamento ou depois, entra na fatura que fecha no mês seguinte.
-// O mês da fatura é o mês do VENCIMENTO.
+// t.fatura = mês em que a fatura FECHA. É nesse mês que o gasto conta no app,
+// mesmo que a fatura só seja paga no mês seguinte.
+// Compra ANTES do dia de fechamento: conta no próprio mês.
+// Compra no dia do fechamento ou depois: conta no mês seguinte.
 function faturaAuto(date, pay) {
   const c = cardOf(pay); if (!c || !date) return null;
-  const dia = +date.slice(8, 10);
-  const mesFecha = addMonths(monthOf(date), dia < c.fecha ? 0 : 1);
-  return addMonths(mesFecha, c.vence > c.fecha ? 0 : 1);
+  return addMonths(monthOf(date), +date.slice(8, 10) < c.fecha ? 0 : 1);
 }
-const vencData = (fat, pay) => { const c = cardOf(pay); return c ? pad(Math.min(c.vence, lastDay(fat))) + '/' + fat.slice(5, 7) : ''; };
+const vencMes = (fat, pay) => { const c = cardOf(pay); return c ? addMonths(fat, c.vence > c.fecha ? 0 : 1) : fat; };
+const vencData = (fat, pay) => { const c = cardOf(pay); if (!c) return ''; const vm = vencMes(fat, pay); return pad(Math.min(c.vence, lastDay(vm))) + '/' + vm.slice(5, 7); };
 // Mês em que o lançamento conta no app
 const mesConta = t => t.fatura || monthOf(t.date);
-function faturaOptions(auto, sel) {
+function faturaOptions(auto, sel, pay) {
   let h = '';
   for (let i = -2; i <= 2; i++) {
     const m = addMonths(auto, i);
-    h += `<option value="${m}" ${m === sel ? 'selected' : ''}>${MESES[+m.slice(5) - 1]} de ${m.slice(0, 4)}${m === auto ? ' (automático)' : ''}</option>`;
+    h += `<option value="${m}" ${m === sel ? 'selected' : ''}>${MESES[+m.slice(5) - 1]}/${m.slice(2, 4)} · vence ${vencData(m, pay)}${m === auto ? ' · auto' : ''}</option>`;
   }
   return h;
 }
@@ -549,8 +557,8 @@ function showPending(p) {
       <label class="lbl">Data</label>
       <input id="pdDate" type="date" class="inp" value="${pend.date || todayISO()}">
       ${(() => { const auto = faturaAuto(pend.date || todayISO(), pend.payment); if (!auto) return ''; const sel = pend.fat || auto;
-        return `<label class="lbl">Fatura</label><select id="pdFat" class="inp">${faturaOptions(auto, sel)}</select>
-        <p class="hint">${pend.fat && pend.fat !== auto ? '<b style="color:#b45309">Alterada por você.</b> ' : 'Calculada pelo fechamento no dia ' + cardOf(pend.payment).fecha + '. '}Vence em ${vencData(sel, pend.payment)}.</p>`; })()}
+        return `<label class="lbl">Fatura</label><select id="pdFat" class="inp">${faturaOptions(auto, sel, pend.payment)}</select>
+        <p class="hint">${pend.fat && pend.fat !== auto ? '<b style="color:#b45309">Alterada por você.</b> ' : 'Fatura que fecha no dia ' + cardOf(pend.payment).fecha + ' de ' + MESES[+sel.slice(5) - 1] + '. '}Vence em ${vencData(sel, pend.payment)}.</p>`; })()}
       <div class="row" style="margin-top:20px">
         <button class="btn gray" style="flex:1" id="pdDiscard">❌ Descartar</button>
         <button class="btn" style="flex:1;background:${COR.green}" id="pdApprove" ${pend.catId && pend.payment ? '' : 'disabled'}>✅ Aprovar</button>
@@ -666,17 +674,17 @@ function renderFatura() {
   if (!auto) { $('fatBox').style.display = 'none'; return; }
   const sel = state.fatManual || auto, c = cardOf(state.payment);
   $('fatBox').style.display = '';
-  $('fatSel').innerHTML = faturaOptions(auto, sel);
+  $('fatSel').innerHTML = faturaOptions(auto, sel, state.payment);
   $('fatHint').innerHTML = (state.fatManual && state.fatManual !== auto
     ? '<b style="color:#b45309">Alterada por você.</b> '
-    : `Calculada pelo fechamento no dia ${c.fecha}. `) + `Vence em ${vencData(sel, state.payment)}. Conta nos gastos de <b>${MESES[+sel.slice(5) - 1]}</b>.`;
+    : `Fatura que fecha no dia ${c.fecha} de ${MESES[+sel.slice(5) - 1]}. `) + `Vence em ${vencData(sel, state.payment)}. Conta nos gastos de <b>${MESES[+sel.slice(5) - 1]}</b>.`;
 }
 
 /* ================== TELA: MÊS ================== */
 function renderMes() {
   const m = state.viewMonth, cm = curMonth();
   $('mLabel').textContent = monthLabel(m);
-  $('mFuture').innerHTML = m > cm ? '<div class="future">🔮 <b>Mês futuro.</b> Aparecem aqui os gastos fixos já agendados, o que você lançar com data deste mês e as compras no crédito cuja fatura vence neste mês.</div>' : '';
+  $('mFuture').innerHTML = m > cm ? '<div class="future">🔮 <b>Mês futuro.</b> Aparecem aqui os gastos fixos já agendados, o que você lançar com data deste mês e as compras no crédito cuja fatura fecha neste mês.</div>' : '';
   const {ent, gas, saldo, byCat, byId} = totals(m);
   $('mCards').innerHTML = `
     <div class="mini"><small>Entradas</small><b class="pos">${fmt(ent)}</b></div>
@@ -1024,6 +1032,7 @@ const blank = n => Array(n).fill('');
 function exportar() {
   const rows = [HEADER];
   rows.push(['CONFIG', '', '', '', centsToBR(data.limit), '', 'Limite mensal', ...blank(10)]);
+  rows.push(['VERSAO', '', '', '', '7', '', 'Fatura = mês em que fecha', ...blank(10)]);
   data.payments.forEach(p => rows.push(['PAGAMENTO', '', '', '', '', p, ...blank(11)]));
   Object.entries(data.cards).forEach(([p, c]) => rows.push(['CARTAO', '', '', '', '', p, '', c.fecha, ...blank(8), c.vence]));
   data.categories.forEach(c => rows.push(['CATEGORIA', '', tipoLabel(c.type), c.name, '', '', '', '', c.id, ...blank(8)]));
@@ -1084,6 +1093,7 @@ function importar(file) {
       for (const r of rows.slice(1)) {
         const [reg, dt, tp, cat, val, pay, desc, day, id, catId, fixId, endT, endM, parc, skip, fatCol, venCol] = HEADER.map((_, i) => (r[i] || '').trim());
         if (reg === 'CONFIG') { const v = parseMoney(val); if (v > 0) nd.limit = v; }
+        else if (reg === 'VERSAO') { nd.versaoCsv = parseInt(val, 10) || 0; }
         else if (reg === 'CARTAO' && pay) { const fe = parseInt(day, 10), ve = parseInt(venCol, 10); if (fe >= 1 && fe <= 31 && ve >= 1 && ve <= 31) { nd.cards = nd.cards || {}; nd.cards[pay] = {fecha: fe, vence: ve}; } }
         else if (reg === 'PAGAMENTO' && pay) { if (!nd.payments.includes(pay)) nd.payments.push(pay); }
         else if (reg === 'CATEGORIA' && cat) nd.categories.push({id: id || uid(), name: cat, type: tipoParse(tp)});
@@ -1127,6 +1137,7 @@ function importar(file) {
         `\n\nIsso vai SUBSTITUIR todos os dados atuais do app. Continuar?`;
       if (!confirm(msg)) return;
       nd.pendingQueue = data.pendingQueue; nd.seenIds = data.seenIds;
+      nd.version = nd.versaoCsv || 6; delete nd.versaoCsv;
       data = migrate(nd); save(); applyFixed(); state.viewMonth = curMonth(); renderAll(); toast('Backup restaurado ✔');
     } catch (e) { alert('Não consegui importar: ' + e.message); }
   };
