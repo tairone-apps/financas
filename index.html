@@ -8,7 +8,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" type="image/png" href="icon-180.png">
-<title>Minhas Finanças v7</title>
+<title>Minhas Finanças v8</title>
 <style>
 :root{--bg:#f1f5f9;--card:#fff;--txt:#0f172a;--mut:#64748b;--line:#e2e8f0;--pri:#0f766e;--green:#16a34a;--yellow:#eab308;--red:#dc2626;--blue:#2563eb}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -79,6 +79,17 @@ h4{font-size:14px;margin:16px 0 8px;color:var(--mut);text-transform:uppercase;le
 .tag.ag{background:#f3e8ff;color:#7e22ce}
 .tag.fat{background:#fef3c7;color:#92400e}
 .fatbox{margin-top:4px}
+.tx .del{width:36px;height:36px;font-size:16px}
+.tools{display:flex;justify-content:flex-end;margin:-4px 0 6px}
+.btn.small{padding:8px 12px;font-size:13px;border-radius:10px}
+.btn.danger{background:var(--red)}
+.selrow{cursor:pointer}
+.selrow input{width:24px;height:24px;flex-shrink:0;accent-color:var(--pri)}
+.selbar{position:fixed;left:0;right:0;bottom:calc(64px + env(safe-area-inset-bottom));background:#fff;border-top:1px solid var(--line);box-shadow:0 -4px 12px rgba(0,0,0,.08);padding:10px 12px;display:flex;gap:8px;z-index:7}
+.selbar.hidden{display:none}
+.selbar .btn{flex:1;padding:12px 6px;font-size:14px}
+.svline{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:14px;margin-top:4px}
+.svline b{font-size:18px}
 .empty{color:var(--mut);text-align:center;padding:16px 0;font-size:14px}
 .chartwrap{overflow-x:auto;margin-top:12px}
 .legend{display:flex;flex-wrap:wrap;gap:12px;font-size:12px;color:var(--mut);margin-top:8px}
@@ -113,7 +124,7 @@ tr.avg td{font-weight:700;background:#f8fafc}
 <body>
 
 <header>
-  <h1>💰 Minhas Finanças <small style="font-size:11px;font-weight:600;opacity:.7">v7</small></h1>
+  <h1>💰 Minhas Finanças <small style="font-size:11px;font-weight:600;opacity:.7">v8</small></h1>
   <div id="hdrPill" class="pill"></div>
 </header>
 
@@ -153,8 +164,10 @@ tr.avg td{font-weight:700;background:#f8fafc}
     </div>
     <div id="mFuture"></div>
     <div id="mCards" class="cards3"></div>
+    <div id="mSave" class="card"></div>
     <div id="mLimit" class="card"></div>
     <div class="card"><h3>Gastos por categoria</h3><div id="mCatChart"></div></div>
+    <div class="card"><h3>Gastos por forma de pagamento</h3><div id="mPayChart"></div></div>
     <div class="card"><h3>Lançamentos do mês</h3><div id="mList"></div></div>
   </section>
 
@@ -240,6 +253,7 @@ tr.avg td{font-weight:700;background:#f8fafc}
   <button data-tab="ajustes"><span>⚙️</span>Ajustes</button>
 </nav>
 
+<div id="selBar" class="selbar hidden"></div>
 <div id="modal" class="modal hidden"><div class="sheet" id="modalBody"></div></div>
 <div id="toast"></div>
 
@@ -331,9 +345,11 @@ function migrate(d) {
     });
     d.transactions.forEach(t => { if (t.type === 'gasto' && !t.fatura && !t.fixedId) { const f = faturaAuto(t.date, t.payment); if (f) t.fatura = f; } });
     data = old; }
+  if (!d.savings || !Array.isArray(d.savings.items)) d.savings = {name: 'Reserva', items: []};
+  d.savings.name = (d.savings.name || 'Reserva');
   d.pendingQueue = Array.isArray(d.pendingQueue) ? d.pendingQueue : [];
   d.seenIds = Array.isArray(d.seenIds) ? d.seenIds : [];
-  d.version = 7;
+  d.version = 8;
   return d;
 }
 
@@ -367,7 +383,10 @@ function totals(m) {
       if (t.catId) byId[t.catId] = (byId[t.catId] || 0) + t.value;
     }
   }
-  return {ent, gas, saldo: ent - gas, byCat, byId};
+  let guard = 0;
+  for (const x of data.savings.items) if (monthOf(x.date) === m) guard += x.value;
+  // Sobra = entradas − gastos − o que foi guardado
+  return {ent, gas, guard, saldo: ent - gas - guard, byCat, byId};
 }
 
 function statusOf(gasto, alvo) {
@@ -691,6 +710,7 @@ function renderMes() {
     <div class="mini"><small>Gastos</small><b class="neg">${fmt(gas)}</b></div>
     <div class="mini"><small>Sobra</small><b style="color:${saldoCor(saldo)}">${fmt(saldo)}</b></div>`;
   renderLimitBox($('mLimit'), m);
+  renderGuardado();
 
   const rows = [];
   const nomesAtuais = new Set();
@@ -723,15 +743,169 @@ function renderMes() {
   }).join('') : '<div class="empty">Nenhum gasto neste mês.</div>';
   $('mCatChart').innerHTML = html;
 
+  // gastos por forma de pagamento
+  const byPay = {};
+  for (const t of data.transactions) if (t.type === 'gasto' && mesConta(t) === m) { const k = t.payment || 'Sem forma'; byPay[k] = (byPay[k] || 0) + t.value; }
+  const payRows = Object.entries(byPay).sort((a, b) => b[1] - a[1]), maxP = Math.max(1, ...payRows.map(r => r[1]));
+  const payCor = n => { const i = pays().indexOf(n); return PALETA[(i >= 0 ? i : pays().length + payRows.findIndex(r => r[0] === n)) % PALETA.length]; };
+  $('mPayChart').innerHTML = payRows.length
+    ? payRows.map(([n, v]) => `<div class="catrow"><div class="t"><span>${esc(n)}</span><span><b style="color:var(--txt)">${fmt(v)}</b> · ${gas ? Math.round(v / gas * 100) : 0}%</span></div>
+        <div class="bar"><div style="width:${v / maxP * 100}%;background:${payCor(n)}"></div></div></div>`).join('') +
+      (payRows.some(([n]) => cardOf(n)) ? '<p class="hint">Cartão de crédito conta no mês em que a fatura fecha.</p>' : '')
+    : '<div class="empty">Nenhum gasto neste mês.</div>';
+
   const today = todayISO();
   const list = data.transactions.filter(t => mesConta(t) === m).sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
-  $('mList').innerHTML = list.length ? list.map(t => `
-    <div class="tx">
-      <div class="txl"><b>${esc(catName(t))}${t.fixedId ? '<span class="tag">fixo</span>' : ''}${t.date > today ? '<span class="tag ag">agendado</span>' : ''}</b>
+  for (const id of [...sel.ids]) if (!list.some(t => t.id === id)) sel.ids.delete(id);
+  const info = t => `<div class="txl"><b>${esc(catName(t))}${t.fixedId ? '<span class="tag">fixo</span>' : ''}${t.date > today ? '<span class="tag ag">agendado</span>' : ''}</b>
         <small>${t.fatura ? 'Compra ' : ''}${brDate(t.date)}${t.payment ? ' · ' + esc(t.payment) : ''}${t.fatura ? ' · <span class="tag fat">fatura ' + monthShort(t.fatura) + '</span>' : ''}${t.desc ? ' · ' + esc(t.desc) : ''}</small></div>
-      <div class="txv ${t.type === 'entrada' ? 'pos' : 'neg'}">${t.type === 'entrada' ? '+ ' : '− '}${fmt(t.value)}</div>
-      <button class="del" data-del="${t.id}" aria-label="Apagar">🗑️</button>
-    </div>`).join('') : '<div class="empty">Nenhum lançamento neste mês.</div>';
+      <div class="txv ${t.type === 'entrada' ? 'pos' : 'neg'}">${t.type === 'entrada' ? '+ ' : '− '}${fmt(t.value)}</div>`;
+  $('mList').innerHTML = (list.length && !sel.on ? '<div class="tools"><button class="btn outline small" data-selmode="1">☑️ Selecionar vários</button></div>' : '') +
+    (list.length ? list.map(t => sel.on
+      ? `<label class="tx selrow"><input type="checkbox" data-sel="${t.id}" ${sel.ids.has(t.id) ? 'checked' : ''}>${info(t)}</label>`
+      : `<div class="tx">${info(t)}
+      <button class="del" data-edit="${t.id}" aria-label="Corrigir">✏️</button>
+      <button class="del" data-del="${t.id}" aria-label="Apagar">\uD83D\uDDD1️</button>
+    </div>`).join('') : '<div class="empty">Nenhum lançamento neste mês.</div>') + (sel.on ? '<div style="height:76px"></div>' : '');
+  renderSelBar(list);
+}
+
+/* ---- selecionar vários ---- */
+const sel = {on: false, ids: new Set()};
+function renderSelBar(list) {
+  const bar = $('selBar'); bar.classList.toggle('hidden', !sel.on);
+  if (!sel.on) return;
+  list = list || data.transactions.filter(t => mesConta(t) === state.viewMonth);
+  const todos = list.length > 0 && list.every(t => sel.ids.has(t.id));
+  bar.innerHTML = `<button class="btn gray" data-selall="1">${todos ? 'Limpar' : 'Todos'}</button>
+    <button class="btn gray" data-selcancel="1">Cancelar</button>
+    <button class="btn danger" data-seldel="1" ${sel.ids.size ? '' : 'disabled'}>🗑️ Apagar${sel.ids.size ? ' (' + sel.ids.size + ')' : ''}</button>`;
+}
+function exitSelect() { if (!sel.on && !sel.ids.size) return; sel.on = false; sel.ids.clear(); renderMes(); }
+function apagarSelecionados() {
+  const txs = data.transactions.filter(t => sel.ids.has(t.id)); if (!txs.length) return;
+  const fixos = txs.filter(t => t.fixedId).length;
+  let msg = `Apagar ${txs.length} lançamento(s)?\n\nIsso não pode ser desfeito.`;
+  if (fixos) msg += `\n\n${fixos} deles é/são gasto(s) fixo(s): só este mês será apagado. Os outros meses continuam.`;
+  if (!confirm(msg)) return;
+  for (const t of txs) if (t.fixedId) { const f = data.fixed.find(x => x.id === t.fixedId); if (f && !f.skip.includes(monthOf(t.date))) f.skip.push(monthOf(t.date)); }
+  data.transactions = data.transactions.filter(t => !sel.ids.has(t.id));
+  sel.ids.clear(); sel.on = false;
+  save(); renderAll(); toast(txs.length + ' lançamento(s) apagado(s)');
+}
+
+/* ---- corrigir lançamento ---- */
+const ed = {};
+function abrirEdicao(id) {
+  const t = data.transactions.find(x => x.id === id); if (!t) return;
+  Object.assign(ed, {id, type: t.type, catId: catById(t.catId) ? t.catId : null, payment: t.payment || null, date: t.date, fat: t.fatura || null, val: centsToBR(t.value), fixo: !!t.fixedId});
+  drawEdicao();
+}
+function drawEdicao() {
+  const t = data.transactions.find(x => x.id === ed.id); if (!t) return closeModal();
+  const cats = catsOf(ed.type), payList = pays().slice();
+  if (ed.payment && !payList.includes(ed.payment)) payList.push(ed.payment);
+  const auto = ed.type === 'gasto' ? faturaAuto(ed.date, ed.payment) : null, fsel = auto ? (ed.fat || auto) : null;
+  openModal(`
+    <h3 style="text-align:center;margin-bottom:4px">Corrigir lançamento</h3>
+    ${t.desc ? `<p class="hint" style="text-align:center;margin:0 0 8px">${esc(t.desc)}</p>` : ''}
+    ${ed.fixo ? '<p class="hint" style="text-align:center">Gasto fixo: a correção vale só para este mês. Para mudar todos, edite em Ajustes.</p>'
+      : `<div class="seg" id="edType"><button data-type="gasto" class="${ed.type === 'gasto' ? 'on' : ''}">− Gasto</button><button data-type="entrada" class="${ed.type === 'entrada' ? 'on' : ''}">+ Entrada</button></div>`}
+    <label class="lbl">Valor</label>
+    <div class="valwrap small"><span>R$</span><input id="edVal" inputmode="decimal" value="${esc(ed.val)}" placeholder="0,00" autocomplete="off"></div>
+    <label class="lbl">Categoria</label>
+    <div class="grid" id="edCats">${cats.map(c => `<button data-ecat="${c.id}" class="${c.id === ed.catId ? 'on' : ''}">${esc(c.name)}</button>`).join('')}</div>
+    ${ed.catId ? '' : '<p class="hint" style="color:#b45309">Escolha a categoria.</p>'}
+    ${ed.type === 'gasto' ? `<label class="lbl">Forma de pagamento</label>
+    <div class="chips" id="edPays">${payList.map(x => `<button data-epay="${esc(x)}" class="${x === ed.payment ? 'on' : ''}">${esc(x)}</button>`).join('')}</div>` : ''}
+    <label class="lbl">Data</label>
+    <input id="edDate" type="date" class="inp" value="${ed.date}">
+    ${auto ? `<label class="lbl">Fatura</label><select id="edFat" class="inp">${faturaOptions(auto, fsel, ed.payment)}</select>
+      <p class="hint">${ed.fat && ed.fat !== auto ? '<b style="color:#b45309">Alterada por você.</b> ' : 'Calculada pelo fechamento no dia ' + cardOf(ed.payment).fecha + '. '}Vence em ${vencData(fsel, ed.payment)}. Conta nos gastos de <b>${MESES[+fsel.slice(5) - 1]}</b>.</p>` : ''}
+    <div class="row" style="margin-top:20px"><button class="btn gray" style="flex:1" id="edCancel">Cancelar</button><button class="btn" style="flex:1" id="edSave">Salvar correção</button></div>`);
+  const keep = () => { ed.val = $('edVal').value; ed.date = $('edDate').value || ed.date; };
+  $('edVal').addEventListener('input', e => { e.target.value = e.target.value.replace(/[^\d.,]/g, ''); ed.val = e.target.value; });
+  if ($('edType')) $('edType').addEventListener('click', e => { const b = e.target.closest('button'); if (!b || b.dataset.type === ed.type) return; keep(); ed.type = b.dataset.type; ed.catId = null; ed.fat = null; if (ed.type === 'gasto' && !ed.payment) ed.payment = pays()[0]; drawEdicao(); });
+  $('edCats').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; keep(); ed.catId = b.dataset.ecat; drawEdicao(); });
+  if ($('edPays')) $('edPays').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; keep(); ed.payment = b.dataset.epay; ed.fat = null; drawEdicao(); });
+  $('edDate').addEventListener('change', () => { keep(); ed.fat = null; drawEdicao(); });
+  if ($('edFat')) $('edFat').addEventListener('change', e => { keep(); ed.fat = e.target.value; drawEdicao(); });
+  $('edCancel').onclick = closeModal;
+  $('edSave').onclick = () => {
+    keep();
+    const value = parseMoney(ed.val);
+    if (value <= 0) return toast('Digite o valor');
+    if (!ed.catId) return toast('Escolha a categoria');
+    if (ed.type === 'gasto' && !ed.payment) return toast('Escolha a forma de pagamento');
+    const a = ed.type === 'gasto' ? faturaAuto(ed.date, ed.payment) : null, fat = a ? (ed.fat || a) : null;
+    const m = fat || monthOf(ed.date), before = snap(m), cat = catById(ed.catId);
+    t.type = ed.type; t.value = value; t.catId = cat.id; t.catName = cat.name; t.date = ed.date;
+    if (ed.type === 'gasto') t.payment = ed.payment; else delete t.payment;
+    if (fat) t.fatura = fat; else delete t.fatura;
+    if (!save()) return;
+    closeModal(); renderAll(); toast('Lançamento corrigido ✔');
+    if (ed.type === 'gasto') checkAlerts(m, before);
+  };
+}
+
+/* ---- dinheiro guardado ---- */
+const savedIn = m => data.savings.items.filter(x => monthOf(x.date) === m).sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
+const sobraLivre = (m, ignoreId) => {
+  const t = totals(m), own = ignoreId ? ((data.savings.items.find(x => x.id === ignoreId && monthOf(x.date) === m) || {}).value || 0) : 0;
+  return t.ent - t.gas - t.guard + own;
+};
+function renderGuardado() {
+  const m = state.viewMonth, list = savedIn(m), noMes = list.reduce((s, x) => s + x.value, 0);
+  const acum = data.savings.items.reduce((s, x) => s + x.value, 0), livre = sobraLivre(m);
+  $('mSave').innerHTML = `
+    <div class="lim-top"><h3 style="margin:0">💰 ${esc(data.savings.name)}</h3><button class="ico" data-svren="1" aria-label="Renomear conta">✏️</button></div>
+    <div class="svline"><span>Guardado em ${MESES[+m.slice(5) - 1]}</span><b style="color:${COR.blue}">${fmt(noMes)}</b></div>
+    <div class="svline"><span>Total acumulado</span><b>${fmt(acum)}</b></div>
+    <p class="hint">${livre > 0 ? 'Ainda sobram <b>' + fmt(livre) + '</b> livres neste mês.' : 'Sem sobra livre neste mês.'} A Sobra já desconta o que você guarda.</p>
+    <button class="btn outline full" data-svnew="1">+ Guardar dinheiro</button>
+    ${list.length ? '<div style="margin-top:8px">' + list.map(x => `<div class="item"><div class="n"><b>${fmt(x.value)}</b><small>${brDate(x.date)}</small></div>
+      <button class="ico" data-svedit="${x.id}" aria-label="Corrigir">✏️</button><button class="ico" data-svdel="${x.id}" aria-label="Apagar">\uD83D\uDDD1️</button></div>`).join('') + '</div>' : ''}`;
+}
+function abrirGuardar(id) {
+  const it = id ? data.savings.items.find(x => x.id === id) : null;
+  if (id && !it) return;
+  const m = state.viewMonth, dflt = it ? it.date : (m === curMonth() ? todayISO() : m + '-' + pad(lastDay(m)));
+  openModal(`
+    <h3 style="text-align:center">${it ? 'Corrigir valor guardado' : '💰 Guardar em ' + esc(data.savings.name)}</h3>
+    <label class="lbl">Valor</label>
+    <div class="valwrap small"><span>R$</span><input id="svVal" inputmode="decimal" value="${it ? centsToBR(it.value) : ''}" placeholder="0,00" autocomplete="off"></div>
+    <button class="btn outline full" id="svAll" type="button">Usar toda a sobra livre do mês</button>
+    <p class="hint" id="svHint"></p>
+    <label class="lbl">Data</label>
+    <input id="svDate" type="date" class="inp" value="${dflt}">
+    <div class="row" style="margin-top:20px"><button class="btn gray" style="flex:1" id="svCancel">Cancelar</button><button class="btn" style="flex:1" id="svSave">Salvar</button></div>`);
+  const mesSel = () => monthOf($('svDate').value || dflt);
+  const hint = () => { const mm = mesSel(), l = sobraLivre(mm, id); $('svHint').innerHTML = `Sobra livre em ${MESES[+mm.slice(5) - 1]}: <b>${fmt(Math.max(0, l))}</b>`; };
+  hint();
+  $('svVal').addEventListener('input', e => { e.target.value = e.target.value.replace(/[^\d.,]/g, ''); });
+  $('svDate').addEventListener('change', hint);
+  $('svAll').onclick = () => { const l = sobraLivre(mesSel(), id); if (l <= 0) return toast('Não há sobra livre neste mês'); $('svVal').value = centsToBR(l); };
+  $('svCancel').onclick = closeModal;
+  $('svSave').onclick = () => {
+    const value = parseMoney($('svVal').value), date = $('svDate').value || dflt;
+    if (value <= 0) return toast('Digite o valor');
+    const mm = monthOf(date), l = sobraLivre(mm, id);
+    if (value > l && !confirm(`Você está guardando ${fmt(value)}, mas a sobra livre de ${MESES[+mm.slice(5) - 1]} é ${fmt(Math.max(0, l))}.\n\nGuardar mesmo assim? A Sobra do mês vai ficar negativa.`)) return;
+    if (it) { it.value = value; it.date = date; } else data.savings.items.push({id: uid(), date, value});
+    if (!save()) return;
+    closeModal(); renderAll(); toast((it ? 'Valor corrigido' : fmt(value) + ' guardado') + ' ✔');
+  };
+}
+function apagarGuardado(id) {
+  const it = data.savings.items.find(x => x.id === id); if (!it) return;
+  if (!confirm(`Apagar este valor guardado?\n\n${fmt(it.value)} em ${brDate(it.date)}\n\nEle volta para a Sobra do mês.`)) return;
+  data.savings.items = data.savings.items.filter(x => x.id !== id);
+  save(); renderAll(); toast('Valor apagado');
+}
+function renomearConta() {
+  const n = (prompt('Nome da conta onde você guarda o dinheiro:', data.savings.name) || '').trim();
+  if (!n || n === data.savings.name) return;
+  data.savings.name = n.slice(0, 30); save(); renderAll(); toast('Nome alterado');
 }
 
 function apagarLancamento(id) {
@@ -795,6 +969,7 @@ function renderHist() {
   }
   $('histTable').innerHTML = `<table><thead><tr><th>Mês</th><th>Entradas</th><th>Gastos</th><th>Sobra</th></tr></thead><tbody>${rows}</tbody></table>` +
     (fechados.length >= 2 ? '<p class="hint">* A média considera só os meses já encerrados.</p>' : '') +
+    (data.savings.items.length ? '<p class="hint">A Sobra já desconta o que você guardou em cada mês.</p>' : '') +
     (fechados.length === 0 ? '<p class="hint">Os meses encerrados aparecem aqui a partir do mês que vem.</p>' : '');
 }
 
@@ -1032,8 +1207,10 @@ const blank = n => Array(n).fill('');
 function exportar() {
   const rows = [HEADER];
   rows.push(['CONFIG', '', '', '', centsToBR(data.limit), '', 'Limite mensal', ...blank(10)]);
-  rows.push(['VERSAO', '', '', '', '7', '', 'Fatura = mês em que fecha', ...blank(10)]);
+  rows.push(['VERSAO', '', '', '', '8', '', 'Fatura = mês em que fecha; guardado desconta da sobra', ...blank(10)]);
   data.payments.forEach(p => rows.push(['PAGAMENTO', '', '', '', '', p, ...blank(11)]));
+  rows.push(['CONTA_GUARDADO', '', '', '', '', '', data.savings.name, ...blank(10)]);
+  data.savings.items.slice().sort((a, b) => a.date.localeCompare(b.date)).forEach(x => rows.push(['GUARDADO', brDate(x.date), '', '', centsToBR(x.value), '', '', '', x.id, ...blank(8)]));
   Object.entries(data.cards).forEach(([p, c]) => rows.push(['CARTAO', '', '', '', '', p, '', c.fecha, ...blank(8), c.vence]));
   data.categories.forEach(c => rows.push(['CATEGORIA', '', tipoLabel(c.type), c.name, '', '', '', '', c.id, ...blank(8)]));
   Object.entries(data.budgets).forEach(([cid, list]) => list.forEach(b =>
@@ -1089,12 +1266,15 @@ function importar(file) {
       const rows = parseCSV(reader.result).filter(r => r.some(c => c.trim() !== ''));
       if (!rows.length || rows[0][0].trim() !== 'Registro') throw new Error('Este arquivo não parece ser um backup deste app.');
       const nd = {version: 4, limit: data.limit, payments: [], categories: [], transactions: [], fixed: [], fixedApplied: {}, budgets: {}, lastBackup: data.lastBackup, pendingQueue: data.pendingQueue, seenIds: data.seenIds};
+      nd.savings = {name: 'Reserva', items: []};
       let ignoradas = 0; const pendT = [], prevs = [];
       for (const r of rows.slice(1)) {
         const [reg, dt, tp, cat, val, pay, desc, day, id, catId, fixId, endT, endM, parc, skip, fatCol, venCol] = HEADER.map((_, i) => (r[i] || '').trim());
         if (reg === 'CONFIG') { const v = parseMoney(val); if (v > 0) nd.limit = v; }
         else if (reg === 'VERSAO') { nd.versaoCsv = parseInt(val, 10) || 0; }
         else if (reg === 'CARTAO' && pay) { const fe = parseInt(day, 10), ve = parseInt(venCol, 10); if (fe >= 1 && fe <= 31 && ve >= 1 && ve <= 31) { nd.cards = nd.cards || {}; nd.cards[pay] = {fecha: fe, vence: ve}; } }
+        else if (reg === 'CONTA_GUARDADO') { if (desc) nd.savings.name = desc.slice(0, 30); }
+        else if (reg === 'GUARDADO') { const dd = parseDate(dt), v = parseMoney(val); if (dd && v > 0) nd.savings.items.push({id: id || uid(), date: dd, value: v}); else ignoradas++; }
         else if (reg === 'PAGAMENTO' && pay) { if (!nd.payments.includes(pay)) nd.payments.push(pay); }
         else if (reg === 'CATEGORIA' && cat) nd.categories.push({id: id || uid(), name: cat, type: tipoParse(tp)});
         else if (reg === 'PREVISAO') { const from = parseMonth(dt); if (from) prevs.push({catId, catName: cat, from, value: parseMoney(val)}); else ignoradas++; }
@@ -1132,7 +1312,7 @@ function importar(file) {
       nd.transactions = pendT;
       nd.fixed.forEach(f => { if (!nd.fixedApplied[f.id]) nd.fixedApplied[f.id] = []; });
 
-      const msg = `Encontrei neste backup:\n• ${nd.transactions.length} lançamento(s)\n• ${nd.fixed.length} gasto(s) fixo(s)\n• ${nd.categories.length} categoria(s)\n• ${nd.payments.length || DEFAULT_PAYMENTS.length} forma(s) de pagamento\n• ${Object.keys(nd.budgets).length} previsão(ões) de categoria\n• Limite: ${fmt(nd.limit)}` +
+      const msg = `Encontrei neste backup:\n• ${nd.transactions.length} lançamento(s)\n• ${nd.savings.items.length} valor(es) guardado(s)\n• ${nd.fixed.length} gasto(s) fixo(s)\n• ${nd.categories.length} categoria(s)\n• ${nd.payments.length || DEFAULT_PAYMENTS.length} forma(s) de pagamento\n• ${Object.keys(nd.budgets).length} previsão(ões) de categoria\n• Limite: ${fmt(nd.limit)}` +
         (ignoradas ? `\n\n(${ignoradas} linha(s) com problema foram ignoradas)` : '') +
         `\n\nIsso vai SUBSTITUIR todos os dados atuais do app. Continuar?`;
       if (!confirm(msg)) return;
@@ -1151,6 +1331,7 @@ function closeModal() { $('modal').classList.add('hidden'); if (!pend.active && 
 $('modal').addEventListener('click', e => { if (e.target.id === 'modal' && !pend.active) closeModal(); });
 
 function showTab(name) {
+  if (name !== 'mes') exitSelect();
   document.querySelectorAll('.tab').forEach(s => s.classList.toggle('active', s.id === 'tab-' + name));
   document.querySelectorAll('.tabbar button').forEach(b => b.classList.toggle('on', b.dataset.tab === name));
   window.scrollTo(0, 0);
@@ -1167,9 +1348,36 @@ $('dataInp').addEventListener('change', () => { state.fatManual = null; renderFa
 $('fatSel').addEventListener('change', e => { state.fatManual = e.target.value; renderFatura(); renderCatHint(); });
 $('valor').addEventListener('input', e => { e.target.value = e.target.value.replace(/[^\d.,]/g, ''); });
 $('btnSalvar').addEventListener('click', salvarLancamento);
-$('mPrev').addEventListener('click', () => { state.viewMonth = addMonths(state.viewMonth, -1); renderMes(); });
-$('mNext').addEventListener('click', () => { state.viewMonth = addMonths(state.viewMonth, 1); renderMes(); });
-$('mList').addEventListener('click', e => { const b = e.target.closest('[data-del]'); if (b) apagarLancamento(b.dataset.del); });
+$('mPrev').addEventListener('click', () => { sel.ids.clear(); state.viewMonth = addMonths(state.viewMonth, -1); renderMes(); });
+$('mNext').addEventListener('click', () => { sel.ids.clear(); state.viewMonth = addMonths(state.viewMonth, 1); renderMes(); });
+$('mList').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.del) apagarLancamento(b.dataset.del);
+  else if (b.dataset.edit) abrirEdicao(b.dataset.edit);
+  else if (b.dataset.selmode) { sel.on = true; sel.ids.clear(); renderMes(); }
+});
+$('mList').addEventListener('change', e => {
+  const c = e.target.closest('input[data-sel]'); if (!c) return;
+  if (c.checked) sel.ids.add(c.dataset.sel); else sel.ids.delete(c.dataset.sel);
+  renderSelBar();
+});
+$('selBar').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b || b.disabled) return;
+  if (b.dataset.selcancel) exitSelect();
+  else if (b.dataset.seldel) apagarSelecionados();
+  else if (b.dataset.selall) {
+    const list = data.transactions.filter(t => mesConta(t) === state.viewMonth);
+    if (list.every(t => sel.ids.has(t.id))) sel.ids.clear(); else list.forEach(t => sel.ids.add(t.id));
+    renderMes();
+  }
+});
+$('mSave').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.svnew) abrirGuardar(null);
+  else if (b.dataset.svedit) abrirGuardar(b.dataset.svedit);
+  else if (b.dataset.svdel) apagarGuardado(b.dataset.svdel);
+  else if (b.dataset.svren) renomearConta();
+});
 $('histChips').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; state.histN = +b.dataset.n; renderHist(); });
 $('histTable').addEventListener('click', e => { const tr = e.target.closest('tr[data-month]'); if (!tr) return; state.viewMonth = tr.dataset.month; renderMes(); showTab('mes'); });
 $('btnLimit').addEventListener('click', salvarLimite);
