@@ -8,7 +8,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" type="image/png" href="icon-180.png">
-<title>Minhas Finanças v10</title>
+<title>Minhas Finanças v11</title>
 <style>
 :root{--bg:#f1f5f9;--card:#fff;--txt:#0f172a;--mut:#64748b;--line:#e2e8f0;--pri:#0f766e;--green:#16a34a;--yellow:#eab308;--red:#dc2626;--blue:#2563eb}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -92,6 +92,20 @@ h4{font-size:14px;margin:16px 0 8px;color:var(--mut);text-transform:uppercase;le
 .selbar .btn{flex:1;padding:12px 6px;font-size:14px}
 .svline{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:14px;margin-top:4px}
 .svline b{font-size:18px}
+.divbox{background:#f8fafc;border:2px solid var(--line);border-radius:14px;padding:12px;margin-top:10px}
+.divrow{background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px;margin-bottom:8px}
+.divrow .row{margin-top:8px}
+.divrow .valwrap{flex:1}
+.divrow .valwrap input{font-size:18px}
+.btns3{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}
+.btns3 .btn{flex:1 1 auto}
+.tag.div{background:#ecfeff;color:#0e7490}
+.rec-person h3{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:0 0 6px}
+.rec-sum{font-size:14px;margin-bottom:8px;line-height:1.5}
+.rec .txv{font-size:14px}
+.rec.paid .txl,.rec.paid .txv{opacity:.45;text-decoration:line-through}
+.paybtn{border:2px solid var(--line);background:#fff;color:var(--mut);border-radius:10px;padding:8px 10px;font-size:13px;font-weight:700;cursor:pointer;flex-shrink:0;min-width:88px;font-family:inherit}
+.paybtn.on{background:#f0fdf4;border-color:var(--green);color:var(--green)}
 .empty{color:var(--mut);text-align:center;padding:16px 0;font-size:14px}
 .chartwrap{overflow-x:auto;margin-top:12px}
 .viewsel{display:flex;align-items:center;gap:8px;margin:12px 0 4px}
@@ -112,8 +126,8 @@ tr.avg td{font-weight:700;background:#f8fafc}
 .item .n{flex:1;min-width:0}
 .item small{display:block;color:var(--mut);font-size:12px}
 .sumbox{border-radius:12px;padding:10px 12px;font-size:13px;margin-top:12px;line-height:1.4}
-.tabbar{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(4,1fr);padding-bottom:env(safe-area-inset-bottom);z-index:6}
-.tabbar button{border:0;background:none;padding:10px 0 12px;font-size:12px;color:var(--mut);cursor:pointer;font-family:inherit}
+.tabbar{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(5,1fr);padding-bottom:env(safe-area-inset-bottom);z-index:6}
+.tabbar button{border:0;background:none;padding:10px 0 12px;font-size:11px;color:var(--mut);cursor:pointer;font-family:inherit}
 .tabbar button span{display:block;font-size:22px;margin-bottom:2px}
 .tabbar button.on{color:var(--pri);font-weight:700}
 .modal{position:fixed;inset:0;background:rgba(15,23,42,.55);display:flex;align-items:flex-end;justify-content:center;z-index:20}
@@ -132,7 +146,7 @@ tr.avg td{font-weight:700;background:#f8fafc}
 <body>
 
 <header>
-  <h1>💰 Minhas Finanças <small style="font-size:11px;font-weight:600;opacity:.7">v10</small></h1>
+  <h1>💰 Minhas Finanças <small style="font-size:11px;font-weight:600;opacity:.7">v11</small></h1>
   <div id="hdrPill" class="pill"></div>
 </header>
 
@@ -176,6 +190,15 @@ tr.avg td{font-weight:700;background:#f8fafc}
           <p id="parcHint" class="hint"></p>
         </div>
       </div>
+      <div id="divBox" style="display:none">
+        <label class="lbl">Dividir com outras pessoas</label>
+        <div class="seg neutral" id="divSeg">
+          <button data-div="0" class="on">Só eu</button>
+          <button data-div="1">Dividir</button>
+        </div>
+        <div id="divFields" class="divbox" style="display:none"></div>
+        <datalist id="peopleList"></datalist>
+      </div>
       <button id="btnSalvar" class="btn big">Salvar</button>
     </div>
   </section>
@@ -195,6 +218,19 @@ tr.avg td{font-weight:700;background:#f8fafc}
     <div class="card"><h3>Lançamentos do mês</h3><div id="mList"></div></div>
   </section>
 
+  <section id="tab-receber" class="tab">
+    <div class="monthnav">
+      <button id="rPrev" aria-label="Mês anterior">‹</button>
+      <h2 id="rLabel"></h2>
+      <button id="rNext" aria-label="Próximo mês">›</button>
+    </div>
+    <div class="chips" id="rFilter" style="margin-bottom:12px">
+      <button data-f="pend" class="on">Pendentes</button>
+      <button data-f="todas">Todas</button>
+    </div>
+    <div id="rSummary"></div>
+    <div id="rList"></div>
+  </section>
   <section id="tab-hist" class="tab">
     <div class="card">
       <h3>Comparar meses</h3>
@@ -212,7 +248,7 @@ tr.avg td{font-weight:700;background:#f8fafc}
       <div class="legend" id="histLegend"></div>
     </div>
     <div class="card">
-      <h3>Resumo por mês</h3>
+      <h3 id="histTblTitle">Resumo por mês</h3>
       <div id="histTable"></div>
       <p class="hint">Toque em um mês para ver os detalhes dele.</p>
     </div>
@@ -273,6 +309,7 @@ tr.avg td{font-weight:700;background:#f8fafc}
 <nav class="tabbar">
   <button data-tab="lancar" class="on"><span>➕</span>Lançar</button>
   <button data-tab="mes"><span>📅</span>Mês</button>
+  <button data-tab="receber"><span>🤝</span>A receber</button>
   <button data-tab="hist"><span>📊</span>Histórico</button>
   <button data-tab="ajustes"><span>⚙️</span>Ajustes</button>
 </nav>
@@ -373,7 +410,7 @@ function migrate(d) {
   d.savings.name = (d.savings.name || 'Reserva');
   d.pendingQueue = Array.isArray(d.pendingQueue) ? d.pendingQueue : [];
   d.seenIds = Array.isArray(d.seenIds) ? d.seenIds : [];
-  d.version = 10;
+  d.version = 11;
   return d;
 }
 
@@ -449,6 +486,89 @@ function faturaOptions(auto, sel, pay) {
     h += `<option value="${m}" ${m === sel ? 'selected' : ''}>${MESES[+m.slice(5) - 1]}/${m.slice(2, 4)} · vence ${vencData(m, pay)}${m === auto ? ' · auto' : ''}</option>`;
   }
   return h;
+}
+
+/* ================== PESSOAS (gasto dividido) ================== */
+// t.value = SÓ A SUA PARTE (é o que entra em gastos, limite, sobra e gráficos).
+// t.others = [{id, n: nome, v: valor, paid: true/false}] = partes de outras pessoas (NÃO entram em nenhum total seu).
+function othersOf(t) { return Array.isArray(t.others) ? t.others : []; }
+const othersSum = t => othersOf(t).reduce((s, o) => s + o.v, 0);
+const totalOf = t => t.value + othersSum(t);
+const pKey = n => semAcento(n).replace(/\s+/g, ' ').trim();
+const cleanName = n => String(n || '').replace(/[|=;"\r\n]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 30);
+function refreshPeople() {
+  const m = new Map();
+  data.transactions.forEach(t => othersOf(t).forEach(o => { const k = pKey(o.n); if (!m.has(k)) m.set(k, o.n); }));
+  $('peopleList').innerHTML = [...m.values()].sort((a, b) => a.localeCompare(b, 'pt-BR')).map(n => `<option value="${esc(n)}">`).join('');
+}
+function divCalc(st, V) {
+  const people = []; let err = '';
+  for (const r of st.rows) {
+    const v = parseMoney(r.val), n = cleanName(r.name);
+    if (!n && !v) continue;
+    if (!n) { err = 'Escreva o nome de quem vai pagar.'; continue; }
+    if (!v) continue;
+    people.push({id: r.id, name: n, v, paid: !!r.paid});
+  }
+  const sum = people.reduce((s, p) => s + p.v, 0), mine = V - sum;
+  if (V > 0 && mine < 0) err = 'A soma das outras pessoas passa do valor total.';
+  return {people, sum, mine, err};
+}
+function divBoxInner() {
+  return `<p class="hint" style="margin:0 0 8px">O valor digitado é o <b>total da compra</b>. Só a <b>sua parte</b> entra nos seus gastos e no limite.</p>
+    <div data-rows></div>
+    <div class="btns3">
+      <button type="button" class="btn outline small" data-act="add">+ Pessoa</button>
+      <button type="button" class="btn outline small" data-act="eq">Dividir igual</button>
+      <button type="button" class="btn outline small" data-act="all">Tudo para outra pessoa</button>
+    </div>
+    <p class="hint" data-hint></p>`;
+}
+function divDrawRows(box, st) {
+  box.querySelector('[data-rows]').innerHTML = st.rows.map((r, i) => `
+    <div class="divrow">
+      <input class="inp" list="peopleList" data-nm="${i}" placeholder="Nome (ex.: Mãe)" value="${esc(r.name)}" maxlength="30" autocomplete="off">
+      <div class="row">
+        <div class="valwrap small"><span>R$</span><input data-vl="${i}" inputmode="decimal" placeholder="0,00" value="${esc(r.val)}" autocomplete="off"></div>
+        <button type="button" class="ico" data-rdel="${i}" aria-label="Tirar pessoa">🗑️</button>
+      </div>
+    </div>`).join('');
+}
+function divHint(box, st, getV, suf) {
+  const el = box.querySelector('[data-hint]'); if (!el) return;
+  const V = getV();
+  if (V <= 0) { el.textContent = 'Digite o valor total da compra no campo acima.'; return; }
+  const c = divCalc(st, V);
+  el.innerHTML = `Minha parte: <b>${fmt(Math.max(0, c.mine))}</b> · outras pessoas: <b>${fmt(c.sum)}</b> · total ${fmt(V)}${suf()}` +
+    (c.err ? `<br><span style="color:#b45309">${c.err}</span>` : '');
+}
+function bindDiv(box, st, getV, suf) {
+  const upd = () => divHint(box, st, getV, suf);
+  box.addEventListener('input', e => {
+    const el = e.target, isN = el.dataset.nm !== undefined, i = isN ? +el.dataset.nm : (el.dataset.vl !== undefined ? +el.dataset.vl : -1);
+    if (i < 0 || !st.rows[i]) return;
+    if (isN) st.rows[i].name = el.value;
+    else { el.value = el.value.replace(/[^\d.,]/g, ''); st.rows[i].val = el.value; }
+    upd();
+  });
+  box.addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    const V = getV();
+    if (b.dataset.rdel !== undefined) { st.rows.splice(+b.dataset.rdel, 1); if (!st.rows.length) st.rows.push({name: '', val: ''}); }
+    else if (b.dataset.act === 'add') st.rows.push({name: '', val: ''});
+    else if (b.dataset.act === 'eq') {
+      if (V <= 0) return toast('Digite o valor total acima');
+      const share = Math.floor(V / (st.rows.length + 1));
+      st.rows.forEach(r => { r.val = centsToBR(share); });
+    }
+    else if (b.dataset.act === 'all') {
+      if (V <= 0) return toast('Digite o valor total acima');
+      st.rows.forEach((r, i) => { r.val = i === 0 ? centsToBR(V) : ''; });
+    }
+    else return;
+    divDrawRows(box, st); upd();
+  });
+  return upd;
 }
 
 /* ================== PREVISÃO POR CATEGORIA ================== */
@@ -650,7 +770,8 @@ function showPending(p) {
 }
 
 /* ================== ESTADO DA TELA ================== */
-const state = {type: 'gasto', catId: null, payment: null, viewMonth: curMonth(), histN: 3, histView: (localStorage.getItem('financas_histView') || 'sobra'), fatManual: null, parc: {on: false, n: 2, mode: 'total'}};
+const state = {type: 'gasto', catId: null, payment: null, viewMonth: curMonth(), histN: 3, histView: (localStorage.getItem('financas_histView') || 'sobra'), fatManual: null, parc: {on: false, n: 2, mode: 'total'}, div: {on: false, rows: [{name: '', val: ''}]}, recMonth: curMonth(), recFilter: 'pend'};
+let divUpd = null;
 
 /* ================== TELA: LANÇAR ================== */
 function renderLimitBox(el, m) {
@@ -695,6 +816,7 @@ function renderLancar() {
   $('payChips').innerHTML = pays().map(p => `<button data-pay="${esc(p)}" class="${p === state.payment ? 'on' : ''}">${esc(p)}</button>`).join('');
   renderFatura();
   renderParc();
+  renderDiv();
   $('btnSalvar').textContent = state.type === 'gasto' ? 'Salvar gasto' : 'Salvar entrada';
   $('btnSalvar').style.background = state.type === 'gasto' ? COR.red : COR.green;
 }
@@ -714,6 +836,14 @@ function renderParc() {
   $('parcFields').style.display = state.parc.on ? '' : 'none';
   if (document.activeElement !== $('parcN')) $('parcN').value = state.parc.n;
   renderParcHint();
+  if (divUpd) divUpd();
+}
+function renderDiv() {
+  $('divBox').style.display = state.type === 'gasto' ? '' : 'none';
+  document.querySelectorAll('#divSeg button').forEach(b => b.classList.toggle('on', (b.dataset.div === '1') === state.div.on));
+  $('divFields').style.display = state.div.on ? '' : 'none';
+  if (!$('divFields').contains(document.activeElement)) divDrawRows($('divFields'), state.div);
+  if (divUpd) divUpd();
 }
 function renderParcHint() {
   const el = $('parcHint');
@@ -726,6 +856,7 @@ function renderParcHint() {
   const txt = pl.first === pl.base ? `${N}x de ${fmt(pl.base)}` : `1ª de ${fmt(pl.first)} e ${N - 1}x de ${fmt(pl.base)}`;
   el.innerHTML = `<b>${txt}</b> · total ${fmt(pl.total)}.<br>Meses: ${monthShort(first)} a ${monthShort(addMonths(first, N - 1))}.`;
 }
+const parcShare = (v, N, mode, i) => mode === 'parcela' ? v : (i === 0 ? v - Math.floor(v / N) * (N - 1) : Math.floor(v / N));
 function salvarLancamento() {
   const value = parseMoney($('valor').value);
   if (value <= 0) { toast('Digite o valor'); $('valor').focus(); return; }
@@ -733,33 +864,48 @@ function salvarLancamento() {
   const date = $('dataInp').value || todayISO();
   const fat = faturaLanc();
   const cat = catById(state.catId);
+  const split = state.type === 'gasto' && state.div.on;
+  let calc = null;
+  if (split) {
+    calc = divCalc(state.div, value);
+    if (calc.err) { toast(calc.err); return; }
+    if (!calc.people.length) { toast('Escreva o nome e o valor da outra pessoa'); return; }
+  }
+  const resetDiv = () => { state.div.on = false; state.div.rows = [{name: '', val: ''}]; };
   if (state.type === 'gasto' && state.parc.on) {
     const N = parseInt(state.parc.n, 10);
     if (!(N >= 2 && N <= 60)) { toast('Parcelas: de 2 a 60'); return; }
-    const pl = parcPlan(), g = uid(), novos = [];
+    const mode = state.parc.mode, pl = parcPlan(), g = uid(), novos = [], mineBasis = split ? calc.mine : value;
     for (let i = 0; i < N; i++) {
-      const t = {id: uid(), type: 'gasto', value: i === 0 ? pl.first : pl.base, catId: cat.id, catName: cat.name, date: shiftDate(date, i), payment: state.payment, parc: {g, n: i + 1, total: N}};
+      const t = {id: uid(), type: 'gasto', value: parcShare(mineBasis, N, mode, i), catId: cat.id, catName: cat.name, date: shiftDate(date, i), payment: state.payment, parc: {g, n: i + 1, total: N}};
       if (fat) t.fatura = addMonths(fat, i);
+      if (split) {
+        const os = calc.people.map(p => ({id: uid(), n: p.name, v: parcShare(p.v, N, mode, i), paid: false})).filter(o => o.v > 0);
+        if (os.length) t.others = os;
+      }
+      if (t.value <= 0 && !t.others) continue;
       novos.push(t);
     }
     const pairs = novos.map(t => { const m = mesConta(t); return [m, snap(m)]; });
     data.transactions.push(...novos);
     if (!save()) return;
-    toast(`${N}x de ${fmt(pl.base)} salvo ✔ · total ${fmt(pl.total)}`);
-    $('valor').value = ''; state.catId = null; $('dataInp').value = todayISO(); state.fatManual = null; state.parc.on = false;
+    const mineTot = novos.reduce((s, t) => s + t.value, 0);
+    toast(split ? `${N}x salvo ✔ · compra de ${fmt(pl.total)} · sua parte ${fmt(mineTot)}` : `${N}x de ${fmt(pl.base)} salvo ✔ · total ${fmt(pl.total)}`);
+    $('valor').value = ''; state.catId = null; $('dataInp').value = todayISO(); state.fatManual = null; state.parc.on = false; resetDiv();
     renderAll();
     checkAlertsMulti(pairs);
     return;
   }
   const m = fat || monthOf(date);
   const before = snap(m);
-  const t = {id: uid(), type: state.type, value, catId: cat.id, catName: cat.name, date};
+  const t = {id: uid(), type: state.type, value: split ? calc.mine : value, catId: cat.id, catName: cat.name, date};
   if (state.type === 'gasto') t.payment = state.payment;
   if (fat) t.fatura = fat;
+  if (split) t.others = calc.people.map(p => ({id: uid(), n: p.name, v: p.v, paid: false}));
   data.transactions.push(t);
   if (!save()) return;
-  toast((state.type === 'gasto' ? 'Gasto' : 'Entrada') + ' de ' + fmt(value) + ' salvo ✔' + (fat ? ' · fatura de ' + MESES[+fat.slice(5) - 1] : ''));
-  $('valor').value = ''; state.catId = null; $('dataInp').value = todayISO(); state.fatManual = null;
+  toast(split ? `Compra de ${fmt(value)} salva ✔ · sua parte ${fmt(calc.mine)}` : (state.type === 'gasto' ? 'Gasto' : 'Entrada') + ' de ' + fmt(value) + ' salvo ✔' + (fat ? ' · fatura de ' + MESES[+fat.slice(5) - 1] : ''));
+  $('valor').value = ''; state.catId = null; $('dataInp').value = todayISO(); state.fatManual = null; resetDiv();
   renderAll();
   if (state.type === 'gasto') checkAlerts(m, before);
 }
@@ -831,14 +977,15 @@ function renderMes() {
   $('mPayChart').innerHTML = payRows.length
     ? payRows.map(([n, v]) => `<div class="catrow"><div class="t"><span>${esc(n)}</span><span><b style="color:var(--txt)">${fmt(v)}</b> · ${gas ? Math.round(v / gas * 100) : 0}%</span></div>
         <div class="bar"><div style="width:${v / maxP * 100}%;background:${payCor(n)}"></div></div></div>`).join('') +
-      (payRows.some(([n]) => cardOf(n)) ? '<p class="hint">Cartão de crédito conta no mês em que a fatura fecha.</p>' : '')
+      (payRows.some(([n]) => cardOf(n)) ? '<p class="hint">Cartão de crédito conta no mês em que a fatura fecha.</p>' : '') +
+      (data.transactions.some(t => mesConta(t) === m && othersOf(t).length) ? '<p class="hint">Só a sua parte entra aqui. O que é de outras pessoas está na aba A receber.</p>' : '')
     : '<div class="empty">Nenhum gasto neste mês.</div>';
 
   const today = todayISO();
   const list = data.transactions.filter(t => mesConta(t) === m).sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
   for (const id of [...sel.ids]) if (!list.some(t => t.id === id)) sel.ids.delete(id);
-  const info = t => `<div class="txl"><b>${esc(catName(t))}${t.fixedId ? '<span class="tag">fixo</span>' : ''}${t.parc ? '<span class="tag">parcela ' + t.parc.n + '/' + t.parc.total + '</span>' : ''}${t.date > today ? '<span class="tag ag">agendado</span>' : ''}</b>
-        <small>${t.fatura && !t.parc ? 'Compra ' : ''}${brDate(t.date)}${t.payment ? ' · ' + esc(t.payment) : ''}${t.fatura ? ' · <span class="tag fat">fatura ' + monthShort(t.fatura) + '</span>' : ''}${t.desc ? ' · ' + esc(t.desc) : ''}</small></div>
+  const info = t => `<div class="txl"><b>${esc(catName(t))}${t.fixedId ? '<span class="tag">fixo</span>' : ''}${t.parc ? '<span class="tag">parcela ' + t.parc.n + '/' + t.parc.total + '</span>' : ''}${othersOf(t).length ? '<span class="tag div">dividido</span>' : ''}${t.date > today ? '<span class="tag ag">agendado</span>' : ''}</b>
+        <small>${t.fatura && !t.parc ? 'Compra ' : ''}${brDate(t.date)}${t.payment ? ' · ' + esc(t.payment) : ''}${t.fatura ? ' · <span class="tag fat">fatura ' + monthShort(t.fatura) + '</span>' : ''}${t.desc ? ' · ' + esc(t.desc) : ''}</small>${othersOf(t).length ? '<small style="display:block">Dividido: ' + othersOf(t).map(o => esc(o.n) + ' ' + fmt(o.v)).join(' · ') + ' · total ' + fmt(totalOf(t)) + '</small>' : ''}</div>
       <div class="txv ${t.type === 'entrada' ? 'pos' : 'neg'}">${t.type === 'entrada' ? '+ ' : '− '}${fmt(t.value)}</div>`;
   $('mList').innerHTML = (list.length && !sel.on ? '<div class="tools"><button class="btn outline small" data-selmode="1">☑️ Selecionar vários</button></div>' : '') +
     (list.length ? list.map(t => sel.on
@@ -901,6 +1048,8 @@ function apagarSelecionados() {
   const fixos = txs.filter(t => t.fixedId).length;
   let msg = `Apagar ${txs.length} lançamento(s)?\n\nIsso não pode ser desfeito.`;
   if (fixos) msg += `\n\n${fixos} deles é/são gasto(s) fixo(s): só este mês será apagado. Os outros meses continuam.`;
+  const comOut = txs.filter(t => othersOf(t).length).length;
+  if (comOut) msg += `\n\n${comOut} deles tem/têm parte de outras pessoas, que também sai(em) da aba A receber.`;
   if (!confirm(msg)) return;
   finish(ids);
 }
@@ -909,7 +1058,7 @@ function apagarSelecionados() {
 const ed = {};
 function abrirEdicao(id) {
   const t = data.transactions.find(x => x.id === id); if (!t) return;
-  Object.assign(ed, {id, type: t.type, catId: catById(t.catId) ? t.catId : null, payment: t.payment || null, date: t.date, fat: t.fatura || null, val: centsToBR(t.value), fixo: !!t.fixedId, parc: !!t.parc});
+  Object.assign(ed, {id, type: t.type, catId: catById(t.catId) ? t.catId : null, payment: t.payment || null, date: t.date, fat: t.fatura || null, val: centsToBR(totalOf(t)), fixo: !!t.fixedId, parc: !!t.parc, div: {on: othersOf(t).length > 0, rows: othersOf(t).length ? othersOf(t).map(o => ({id: o.id, name: o.n, val: centsToBR(o.v), paid: !!o.paid})) : [{name: '', val: ''}]}});
   drawEdicao();
 }
 function drawEdicao() {
@@ -923,7 +1072,7 @@ function drawEdicao() {
     ${ed.fixo ? '<p class="hint" style="text-align:center">Gasto fixo: a correção vale só para este mês. Para mudar todos, edite em Ajustes.</p>'
       : ed.parc ? `<p class="hint" style="text-align:center">Parcela ${t.parc.n}/${t.parc.total}: a correção vale só para esta parcela.</p>`
       : `<div class="seg" id="edType"><button data-type="gasto" class="${ed.type === 'gasto' ? 'on' : ''}">− Gasto</button><button data-type="entrada" class="${ed.type === 'entrada' ? 'on' : ''}">+ Entrada</button></div>`}
-    <label class="lbl">Valor</label>
+    <label class="lbl">${ed.type === 'gasto' && !ed.fixo ? 'Valor total da compra' : 'Valor'}</label>
     <div class="valwrap small"><span>R$</span><input id="edVal" inputmode="decimal" value="${esc(ed.val)}" placeholder="0,00" autocomplete="off"></div>
     <label class="lbl">Categoria</label>
     <div class="grid" id="edCats">${cats.map(c => `<button data-ecat="${c.id}" class="${c.id === ed.catId ? 'on' : ''}">${esc(c.name)}</button>`).join('')}</div>
@@ -934,24 +1083,36 @@ function drawEdicao() {
     <input id="edDate" type="date" class="inp" value="${ed.date}">
     ${auto ? `<label class="lbl">Fatura</label><select id="edFat" class="inp">${faturaOptions(auto, fsel, ed.payment)}</select>
       <p class="hint">${ed.fat && ed.fat !== auto ? '<b style="color:#b45309">Alterada por você.</b> ' : 'Calculada pelo fechamento no dia ' + cardOf(ed.payment).fecha + '. '}Vence em ${vencData(fsel, ed.payment)}. Conta nos gastos de <b>${MESES[+fsel.slice(5) - 1]}</b>.</p>` : ''}
+    ${ed.type === 'gasto' && !ed.fixo ? `<label class="lbl">Dividir com outras pessoas</label>
+    <div class="seg neutral" id="edDivSeg"><button data-div="0" class="${ed.div.on ? '' : 'on'}">Só eu</button><button data-div="1" class="${ed.div.on ? 'on' : ''}">Dividido</button></div>
+    ${ed.div.on ? '<div class="divbox" id="edDiv">' + divBoxInner() + '</div>' : ''}` : ''}
     <div class="row" style="margin-top:20px"><button class="btn gray" style="flex:1" id="edCancel">Cancelar</button><button class="btn" style="flex:1" id="edSave">Salvar correção</button></div>`);
   const keep = () => { ed.val = $('edVal').value; ed.date = $('edDate').value || ed.date; };
-  $('edVal').addEventListener('input', e => { e.target.value = e.target.value.replace(/[^\d.,]/g, ''); ed.val = e.target.value; });
+  $('edVal').addEventListener('input', e => { e.target.value = e.target.value.replace(/[^\d.,]/g, ''); ed.val = e.target.value; if (ed.divUpd) ed.divUpd(); });
   if ($('edType')) $('edType').addEventListener('click', e => { const b = e.target.closest('button'); if (!b || b.dataset.type === ed.type) return; keep(); ed.type = b.dataset.type; ed.catId = null; ed.fat = null; if (ed.type === 'gasto' && !ed.payment) ed.payment = pays()[0]; drawEdicao(); });
   $('edCats').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; keep(); ed.catId = b.dataset.ecat; drawEdicao(); });
   if ($('edPays')) $('edPays').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; keep(); ed.payment = b.dataset.epay; ed.fat = null; drawEdicao(); });
   $('edDate').addEventListener('change', () => { keep(); ed.fat = null; drawEdicao(); });
   if ($('edFat')) $('edFat').addEventListener('change', e => { keep(); ed.fat = e.target.value; drawEdicao(); });
   $('edCancel').onclick = closeModal;
+  if ($('edDiv')) { divDrawRows($('edDiv'), ed.div); ed.divUpd = bindDiv($('edDiv'), ed.div, () => parseMoney(ed.val), () => ''); ed.divUpd(); } else ed.divUpd = null;
+  if ($('edDivSeg')) $('edDivSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; keep(); ed.div.on = b.dataset.div === '1'; if (ed.div.on && !ed.div.rows.length) ed.div.rows.push({name: '', val: ''}); drawEdicao(); });
   $('edSave').onclick = () => {
     keep();
     const value = parseMoney(ed.val);
     if (value <= 0) return toast('Digite o valor');
     if (!ed.catId) return toast('Escolha a categoria');
     if (ed.type === 'gasto' && !ed.payment) return toast('Escolha a forma de pagamento');
+    let mine = value, others = [];
+    if (ed.type === 'gasto' && !ed.fixo && ed.div.on) {
+      const c = divCalc(ed.div, value);
+      if (c.err) return toast(c.err);
+      if (!c.people.length) return toast('Escreva o nome e o valor da outra pessoa');
+      mine = c.mine; others = c.people.map(p => ({id: p.id || uid(), n: p.name, v: p.v, paid: !!p.paid}));
+    }
     const a = ed.type === 'gasto' ? faturaAuto(ed.date, ed.payment) : null, fat = a ? (ed.fat || a) : null;
     const m = fat || monthOf(ed.date), before = snap(m), cat = catById(ed.catId);
-    t.type = ed.type; t.value = value; t.catId = cat.id; t.catName = cat.name; t.date = ed.date;
+    t.type = ed.type; t.value = mine; if (others.length) t.others = others; else delete t.others; t.catId = cat.id; t.catName = cat.name; t.date = ed.date;
     if (ed.type === 'gasto') t.payment = ed.payment; else delete t.payment;
     if (fat) t.fatura = fat; else delete t.fatura;
     if (!save()) return;
@@ -1025,10 +1186,75 @@ function apagarLancamento(id) {
   if (t.parc && data.transactions.filter(x => x.parc && x.parc.g === t.parc.g).length > 1) return apagarParcela(t);
   let msg = `Apagar este lançamento?\n\n${catName(t)} — ${fmt(t.value)}\n${brDate(t.date)}`;
   if (t.fixedId) msg += '\n\n(É um gasto fixo: só este mês será apagado. Os outros meses continuam.)';
+  if (othersOf(t).length) msg += '\n\nAs partes de outras pessoas (' + fmt(othersSum(t)) + ') também saem da aba A receber.';
   if (!confirm(msg)) return;
   data.transactions = data.transactions.filter(x => x.id !== id);
   if (t.fixedId) { const f = data.fixed.find(x => x.id === t.fixedId); if (f && !f.skip.includes(monthOf(t.date))) f.skip.push(monthOf(t.date)); }
   save(); renderAll(); toast('Lançamento apagado');
+}
+
+/* ================== TELA: A RECEBER ================== */
+function receberAll() {
+  const out = [];
+  for (const t of data.transactions) for (const o of othersOf(t)) out.push({t, o, k: pKey(o.n)});
+  return out;
+}
+function renderReceber() {
+  const m = state.recMonth, all = receberAll(), mm = all.filter(r => mesConta(r.t) === m);
+  $('rLabel').textContent = monthLabel(m);
+  document.querySelectorAll('#rFilter button').forEach(b => b.classList.toggle('on', b.dataset.f === state.recFilter));
+  const sumV = rs => rs.reduce((s, r) => s + r.o.v, 0), pend = rs => rs.filter(r => !r.o.paid);
+  const monthPend = sumV(pend(mm)), monthTot = sumV(mm), allPend = pend(all), allPendSum = sumV(allPend);
+  let sh = `<div class="card">
+    <div class="lim-top"><span>A receber em ${MESES[+m.slice(5) - 1]}</span><b style="color:${monthPend > 0 ? '#b45309' : COR.green}">${fmt(monthPend)}</b></div>
+    <div class="rec-sum" style="color:var(--mut)">Já pagaram ${fmt(monthTot - monthPend)} · total do mês ${fmt(monthTot)}</div>`;
+  if (allPendSum > monthPend) {
+    const byK = new Map(); allPend.forEach(r => { const x = byK.get(r.k) || {n: r.o.n, v: 0}; x.v += r.o.v; byK.set(r.k, x); });
+    sh += `<div class="hint" style="margin:0 0 8px">Em aberto em <b>todos os meses</b>: ${fmt(allPendSum)} (${[...byK.values()].map(x => esc(x.n) + ' ' + fmt(x.v)).join(' · ')})</div>`;
+  }
+  sh += `<p class="hint" style="margin:0">Estes valores <b>não entram</b> nas suas entradas, gastos, sobra, limite nem no guardado. É só um controle do que cada pessoa deve pagar.</p></div>`;
+  $('rSummary').innerHTML = sh;
+  const groups = new Map();
+  mm.forEach(r => { if (!groups.has(r.k)) groups.set(r.k, {name: r.o.n, rows: []}); groups.get(r.k).rows.push(r); });
+  const mostra = [...groups.entries()].filter(([, g]) => state.recFilter === 'todas' || pend(g.rows).length).sort((a, b) => a[1].name.localeCompare(b[1].name, 'pt-BR'));
+  if (!groups.size) { $('rList').innerHTML = '<div class="card"><div class="empty">Nenhuma compra dividida neste mês.<br>Ao lançar um gasto, toque em <b>Dividir</b> para separar o valor.</div></div>'; return; }
+  if (!mostra.length) { $('rList').innerHTML = '<div class="card"><div class="empty">Nada pendente neste mês. Toque em <b>Todas</b> para ver o que já foi pago.</div></div>'; return; }
+  $('rList').innerHTML = mostra.map(([k, g]) => {
+    const pP = sumV(pend(g.rows)), tP = sumV(g.rows), outros = sumV(pend(all.filter(r => r.k === k && mesConta(r.t) !== m)));
+    const rows = g.rows.filter(r => state.recFilter === 'todas' || !r.o.paid).sort((a, b) => a.t.date.localeCompare(b.t.date) || a.t.id.localeCompare(b.t.id));
+    return `<div class="card rec-person">
+      <h3><span>${esc(g.name)}</span><button class="ico" data-rren="${esc(k)}" aria-label="Renomear pessoa">✏️</button></h3>
+      <div class="rec-sum"><b style="color:${pP > 0 ? '#b45309' : COR.green}">${pP > 0 ? 'Falta ' + fmt(pP) : 'Tudo pago'}</b> · já pagou ${fmt(tP - pP)} · total ${fmt(tP)}</div>
+      ${outros > 0 ? `<div class="hint" style="margin:0 0 6px">Também em aberto em outros meses: <b>${fmt(outros)}</b></div>` : ''}
+      ${rows.map(({t, o}) => `<div class="tx rec ${o.paid ? 'paid' : ''}">
+        <div class="txl"><b>${esc(catName(t))}${t.parc ? '<span class="tag">parcela ' + t.parc.n + '/' + t.parc.total + '</span>' : ''}</b>
+          <small>${brDate(t.date)}${t.payment ? ' · ' + esc(t.payment) : ''}${t.fatura ? ' · <span class="tag fat">fatura ' + monthShort(t.fatura) + '</span>' : ''}${t.desc ? ' · ' + esc(t.desc) : ''}</small></div>
+        <div class="txv">${fmt(o.v)}</div>
+        <button type="button" class="paybtn ${o.paid ? 'on' : ''}" data-rpay="${t.id}" data-oid="${o.id}">${o.paid ? '✓ Pago' : 'Pendente'}</button>
+      </div>`).join('')}
+      <button type="button" class="btn full ${pP > 0 ? '' : 'gray'}" data-rall="${esc(k)}">${pP > 0 ? '✓ Marcar todas como pagas' : 'Desmarcar todas'}</button>
+    </div>`;
+  }).join('');
+}
+function togglePago(tid, oid) {
+  const t = data.transactions.find(x => x.id === tid), o = t && othersOf(t).find(x => x.id === oid); if (!o) return;
+  o.paid = !o.paid; save(); renderReceber();
+}
+function marcarTodas(k) {
+  const m = state.recMonth, rs = receberAll().filter(r => r.k === k && mesConta(r.t) === m); if (!rs.length) return;
+  const algum = rs.some(r => !r.o.paid), nome = rs[0].o.n;
+  if (!confirm(algum ? `Marcar como PAGAS as ${rs.filter(r => !r.o.paid).length} compra(s) de ${nome} em ${monthLabel(m)}?` : `Voltar para PENDENTE as ${rs.length} compra(s) de ${nome} em ${monthLabel(m)}?`)) return;
+  rs.forEach(r => { r.o.paid = algum; });
+  save(); renderReceber(); toast(algum ? 'Marcadas como pagas ✔' : 'Voltaram para pendente');
+}
+function renomearPessoa(k) {
+  const first = receberAll().find(r => r.k === k); if (!first) return;
+  const novo = cleanName(prompt('Novo nome para ' + first.o.n + ':', first.o.n) || '');
+  if (!novo || novo === first.o.n) return;
+  const nk = pKey(novo);
+  if (nk !== k && receberAll().some(r => r.k === nk) && !confirm(`Já existe "${novo}". Juntar as compras de ${first.o.n} com as dele(a)?`)) return;
+  data.transactions.forEach(t => othersOf(t).forEach(o => { if (pKey(o.n) === k) o.n = novo; }));
+  save(); renderAll(); toast('Nome alterado');
 }
 
 /* ================== TELA: HISTÓRICO ================== */
@@ -1038,7 +1264,7 @@ function histMonths() {
   const arr = [];
   for (let i = state.histN; i >= 1; i--) { const m = addMonths(cm, -i); if (m >= first) arr.push(m); }
   arr.push(cm);
-  return arr.map(m => ({m, ...totals(m), atual: m === cm}));
+  return arr.map(m => ({m, ...totals(m), acum: data.savings.items.filter(x => monthOf(x.date) <= m).reduce((s, x) => s + x.value, 0), atual: m === cm}));
 }
 
 function compact(c) {
@@ -1053,18 +1279,20 @@ function renderHist() {
   const VIEWS = {
     sobra:  {nome: 'Só o que sobrou', dica: 'Entradas − gastos − guardado'},
     gastos: {nome: 'Só os gastos',    dica: 'Total gasto em cada mês'},
-    ambos:  {nome: 'Gastos e sobra',  dica: 'Lado a lado'}
+    ambos:  {nome: 'Gastos e sobra',  dica: 'Lado a lado'},
+    guardado: {nome: 'Só o guardado',  dica: 'Quanto foi para ' + data.savings.name}
   };
   if (!VIEWS[state.histView]) state.histView = 'sobra';
   const view = state.histView, both = view === 'ambos';
   $('histViewLab').innerHTML = `<b>${VIEWS[view].nome}</b><small>${VIEWS[view].dica}</small>`;
-  const COR_GASTO = '#7c3aed', showG = view !== 'sobra', showS = view !== 'gastos';
+  const COR_GASTO = '#7c3aed', showG = view === 'gastos' || view === 'ambos', showS = view === 'sobra' || view === 'ambos', showV = view === 'guardado', COR_GUARD = '#0f766e';
   $('histLegend').innerHTML =
     (showG ? `<span><i style="background:${COR_GASTO}"></i>Gastou</span>` : '') +
     (showS ? `<span><i style="background:var(--blue)"></i>Sobrou</span><span><i style="background:var(--yellow)"></i>Zerou</span><span><i style="background:var(--red)"></i>Faltou</span>` : '') +
+    (showV ? `<span><i style="background:${COR_GUARD}"></i>Guardou</span>` : '') +
     `<span><i style="background:#cbd5e1;border:1px dashed #64748b"></i>* mês atual (ainda em andamento)</span>`;
   const n = ms.length, slot = both ? 82 : 76, bw = both ? 28 : 44, gap = 6, W = Math.max(300, n * slot), H = 240, top = 28, bot = 44, plotH = H - top - bot;
-  const posMax = Math.max(0, ...(showS ? ms.map(x => x.saldo) : []), ...(showG ? ms.map(x => x.gas) : [])), negMax = Math.max(0, ...(showS ? ms.map(x => -x.saldo) : []));
+  const posMax = Math.max(0, ...(showS ? ms.map(x => x.saldo) : []), ...(showG ? ms.map(x => x.gas) : []), ...(showV ? ms.map(x => x.guard) : [])), negMax = Math.max(0, ...(showS ? ms.map(x => -x.saldo) : []));
   const tot = (posMax + negMax) || 1, zeroY = top + plotH * posMax / tot, k = plotH / tot;
   const offset = (W - n * slot) / 2;
   let svg = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="inherit">`;
@@ -1078,6 +1306,7 @@ function renderHist() {
   ms.forEach((x, i) => {
     const cx = offset + i * slot + slot / 2;
     if (both) svg += bar(cx - gap / 2 - bw, x.gas, COR_GASTO, x.atual) + bar(cx + gap / 2, x.saldo, saldoCor(x.saldo), x.atual);
+    else if (showV) svg += bar(cx - bw / 2, x.guard, COR_GUARD, x.atual);
     else if (showG) svg += bar(cx - bw / 2, x.gas, COR_GASTO, x.atual);
     else svg += bar(cx - bw / 2, x.saldo, saldoCor(x.saldo), x.atual);
     svg += `<text x="${cx}" y="${H - 10}" text-anchor="middle" font-size="12" fill="#475569">${monthShort(x.m)}${x.atual ? '*' : ''}</text>`;
@@ -1085,6 +1314,15 @@ function renderHist() {
   svg += '</svg>';
   $('histChart').innerHTML = svg;
 
+  if (view === 'guardado') {
+    $('histTblTitle').textContent = 'Guardado por mês';
+    const rg = ms.slice().reverse().map(x => `<tr class="click" data-month="${x.m}"><td>${monthShort(x.m)}${x.atual ? '*' : ''}</td><td style="color:${COR_GUARD};font-weight:700">${fmt(x.guard)}</td><td>${fmt(x.acum)}</td></tr>`).join('');
+    const totP = ms.reduce((s, x) => s + x.guard, 0);
+    $('histTable').innerHTML = `<table><thead><tr><th>Mês</th><th>Guardado no mês</th><th>Acumulado</th></tr></thead><tbody>${rg}<tr class="avg"><td>No período</td><td>${fmt(totP)}</td><td>${fmt(ms[ms.length - 1].acum)}</td></tr></tbody></table>` +
+      `<p class="hint">Acumulado = tudo o que você guardou em ${esc(data.savings.name)} até o fim de cada mês.${ms.some(x => x.atual) ? ' * mês atual (ainda em andamento).' : ''}</p>`;
+    return;
+  }
+  $('histTblTitle').textContent = 'Resumo por mês';
   const fechados = ms.filter(x => !x.atual);
   let rows = ms.slice().reverse().map(x => `
     <tr class="click" data-month="${x.m}">
@@ -1358,7 +1596,7 @@ function apagarCategoria(id) {
 }
 
 /* ================== BACKUP (CSV que abre no Excel) ================== */
-const HEADER = ['Registro','Data','Tipo','Categoria','Valor','Pagamento','Descrição','Dia do mês','ID','ID Categoria','ID Fixo','Fim','Último mês','Parcelas','Meses pulados','Fatura','Vencimento','Compra parcelada','Parcela'];
+const HEADER = ['Registro','Data','Tipo','Categoria','Valor','Pagamento','Descrição','Dia do mês','ID','ID Categoria','ID Fixo','Fim','Último mês','Parcelas','Meses pulados','Fatura','Vencimento','Compra parcelada','Parcela','Divisão'];
 const csvCell = v => { v = v == null ? '' : String(v); return /[";\r\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
 const tipoLabel = t => t === 'entrada' ? 'Entrada' : 'Gasto';
 const tipoParse = s => /^e/i.test(s) ? 'entrada' : 'gasto';
@@ -1367,7 +1605,7 @@ const blank = n => Array(n).fill('');
 function exportar() {
   const rows = [HEADER];
   rows.push(['CONFIG', '', '', '', centsToBR(data.limit), '', 'Limite mensal', ...blank(10)]);
-  rows.push(['VERSAO', '', '', '', '10', '', 'Fatura = mês em que fecha; guardado desconta da sobra', ...blank(10)]);
+  rows.push(['VERSAO', '', '', '', '11', '', 'Fatura = mês em que fecha; guardado desconta da sobra', ...blank(10)]);
   data.payments.forEach(p => rows.push(['PAGAMENTO', '', '', '', '', p, ...blank(11)]));
   rows.push(['CONTA_GUARDADO', '', '', '', '', '', data.savings.name, ...blank(10)]);
   data.savings.items.slice().sort((a, b) => a.date.localeCompare(b.date)).forEach(x => rows.push(['GUARDADO', brDate(x.date), '', '', centsToBR(x.value), '', '', '', x.id, ...blank(8)]));
@@ -1379,7 +1617,7 @@ function exportar() {
     f.endType, f.endMonth || '', f.parcelas || '', (f.skip || []).join(' '), '', '']));
   Object.entries(data.fixedApplied).forEach(([fid, ms]) => ms.forEach(m => rows.push(['FIXO_LANCADO', m, '', '', '', '', '', '', '', '', fid, ...blank(6)])));
   data.transactions.slice().sort((a, b) => a.date.localeCompare(b.date)).forEach(t =>
-    rows.push(['LANCAMENTO', brDate(t.date), tipoLabel(t.type), catName(t), centsToBR(t.value), t.payment || '', t.desc || '', '', t.id, t.catId || '', t.fixedId || '', ...blank(4), t.fatura || '', '', t.parc ? t.parc.g : '', t.parc ? t.parc.n + ' de ' + t.parc.total : '']));
+    rows.push(['LANCAMENTO', brDate(t.date), tipoLabel(t.type), catName(t), centsToBR(t.value), t.payment || '', t.desc || '', '', t.id, t.catId || '', t.fixedId || '', ...blank(4), t.fatura || '', '', t.parc ? t.parc.g : '', t.parc ? t.parc.n + ' de ' + t.parc.total : '', othersOf(t).map(o => [o.id, cleanName(o.n), centsToBR(o.v), o.paid ? 'P' : 'N'].join('=')).join('|')]));
   const csv = '\uFEFF' + rows.map(r => r.map(csvCell).join(';')).join('\r\n');
   const blob = new Blob([csv], {type: 'text/csv;charset=utf-8'});
   const a = document.createElement('a');
@@ -1429,7 +1667,7 @@ function importar(file) {
       nd.savings = {name: 'Reserva', items: []};
       let ignoradas = 0; const pendT = [], prevs = [];
       for (const r of rows.slice(1)) {
-        const [reg, dt, tp, cat, val, pay, desc, day, id, catId, fixId, endT, endM, parc, skip, fatCol, venCol, grpCol, parcCol] = HEADER.map((_, i) => (r[i] || '').trim());
+        const [reg, dt, tp, cat, val, pay, desc, day, id, catId, fixId, endT, endM, parc, skip, fatCol, venCol, grpCol, parcCol, divCol] = HEADER.map((_, i) => (r[i] || '').trim());
         if (reg === 'CONFIG') { const v = parseMoney(val); if (v > 0) nd.limit = v; }
         else if (reg === 'VERSAO') { nd.versaoCsv = parseInt(val, 10) || 0; }
         else if (reg === 'CARTAO' && pay) { const fe = parseInt(day, 10), ve = parseInt(venCol, 10); if (fe >= 1 && fe <= 31 && ve >= 1 && ve <= 31) { nd.cards = nd.cards || {}; nd.cards[pay] = {fecha: fe, vence: ve}; } }
@@ -1451,12 +1689,14 @@ function importar(file) {
         else if (reg === 'FIXO_LANCADO') { const m = parseMonth(dt); if (m && fixId) (nd.fixedApplied[fixId] = nd.fixedApplied[fixId] || []).push(m); }
         else if (reg === 'LANCAMENTO') {
           const date = parseDate(dt), v = parseMoney(val);
-          if (!date || v <= 0) { ignoradas++; continue; }
+          const oth = (divCol || '').split('|').map(x => x.split('=')).filter(a => a.length >= 3 && parseMoney(a[2]) > 0).map(a => ({id: a[0] || uid(), n: cleanName(a[1]), v: parseMoney(a[2]), paid: a[3] === 'P'})).filter(o => o.n);
+          if (!date || (v <= 0 && !oth.length)) { ignoradas++; continue; }
           const t = {id: id || uid(), type: tipoParse(tp), value: v, catId, catName: cat, date};
           if (t.type === 'gasto') t.payment = pay || 'Pix';
           if (desc) t.desc = desc;
           if (fixId) t.fixedId = fixId;
           if (parseMonth(fatCol)) t.fatura = parseMonth(fatCol);
+          if (oth.length) t.others = oth;
           { const mp = (parcCol || '').match(/^(\d+)\s*de\s*(\d+)$/); if (grpCol && mp) t.parc = {g: grpCol, n: +mp[1], total: +mp[2]}; }
           pendT.push(t);
         }
@@ -1473,7 +1713,7 @@ function importar(file) {
       nd.transactions = pendT;
       nd.fixed.forEach(f => { if (!nd.fixedApplied[f.id]) nd.fixedApplied[f.id] = []; });
 
-      const msg = `Encontrei neste backup:\n• ${nd.transactions.length} lançamento(s)\n• ${nd.savings.items.length} valor(es) guardado(s)\n• ${nd.fixed.length} gasto(s) fixo(s)\n• ${nd.categories.length} categoria(s)\n• ${nd.payments.length || DEFAULT_PAYMENTS.length} forma(s) de pagamento\n• ${Object.keys(nd.budgets).length} previsão(ões) de categoria\n• Limite: ${fmt(nd.limit)}` +
+      const msg = `Encontrei neste backup:\n• ${nd.transactions.length} lançamento(s)\n• ${nd.savings.items.length} valor(es) guardado(s)\n• ${nd.transactions.reduce((s, t) => s + othersOf(t).length, 0)} parte(s) de outras pessoas\n• ${nd.fixed.length} gasto(s) fixo(s)\n• ${nd.categories.length} categoria(s)\n• ${nd.payments.length || DEFAULT_PAYMENTS.length} forma(s) de pagamento\n• ${Object.keys(nd.budgets).length} previsão(ões) de categoria\n• Limite: ${fmt(nd.limit)}` +
         (ignoradas ? `\n\n(${ignoradas} linha(s) com problema foram ignoradas)` : '') +
         `\n\nIsso vai SUBSTITUIR todos os dados atuais do app. Continuar?`;
       if (!confirm(msg)) return;
@@ -1493,13 +1733,14 @@ $('modal').addEventListener('click', e => { if (e.target.id === 'modal' && !pend
 
 function showTab(name) {
   if (name !== 'mes') exitSelect();
+  if (name === 'receber') renderReceber();
   document.querySelectorAll('.tab').forEach(s => s.classList.toggle('active', s.id === 'tab-' + name));
   document.querySelectorAll('.tabbar button').forEach(b => b.classList.toggle('on', b.dataset.tab === name));
   window.scrollTo(0, 0);
   if (name === 'hist') { const c = $('histChart'); c.scrollLeft = c.scrollWidth; }
 }
 
-function renderAll() { renderHeader(); renderLancar(); renderMes(); renderHist(); renderAjustes(); }
+function renderAll() { refreshPeople(); renderHeader(); renderLancar(); renderMes(); renderReceber(); renderHist(); renderAjustes(); }
 
 /* ================== EVENTOS ================== */
 document.querySelector('.tabbar').addEventListener('click', e => { const b = e.target.closest('button'); if (b) showTab(b.dataset.tab); });
@@ -1508,10 +1749,14 @@ $('catGrid').addEventListener('click', e => { const b = e.target.closest('button
 $('payChips').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; state.payment = b.dataset.pay; state.fatManual = null; renderLancar(); });
 $('dataInp').addEventListener('change', () => { state.fatManual = null; renderFatura(); renderCatHint(); renderParcHint(); });
 $('fatSel').addEventListener('change', e => { state.fatManual = e.target.value; renderFatura(); renderCatHint(); renderParcHint(); });
-$('valor').addEventListener('input', e => { e.target.value = e.target.value.replace(/[^\d.,]/g, ''); renderParcHint(); });
+$('valor').addEventListener('input', e => { e.target.value = e.target.value.replace(/[^\d.,]/g, ''); renderParcHint(); if (divUpd) divUpd(); });
 $('parcSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; state.parc.on = b.dataset.parc === '1'; renderParc(); });
 $('parcMode').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; state.parc.mode = b.dataset.mode; renderParc(); });
 $('parcN').addEventListener('input', e => { state.parc.n = e.target.value; renderParcHint(); });
+$('divFields').innerHTML = divBoxInner();
+divDrawRows($('divFields'), state.div);
+divUpd = bindDiv($('divFields'), state.div, () => parseMoney($('valor').value), () => (state.parc.on && state.parc.mode === 'parcela' ? ' (por parcela)' : ''));
+$('divSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; state.div.on = b.dataset.div === '1'; if (state.div.on && !state.div.rows.length) state.div.rows.push({name: '', val: ''}); renderDiv(); });
 $('btnSalvar').addEventListener('click', salvarLancamento);
 $('mPrev').addEventListener('click', () => { sel.ids.clear(); state.viewMonth = addMonths(state.viewMonth, -1); renderMes(); });
 $('mNext').addEventListener('click', () => { sel.ids.clear(); state.viewMonth = addMonths(state.viewMonth, 1); renderMes(); });
@@ -1543,9 +1788,18 @@ $('mSave').addEventListener('click', e => {
   else if (b.dataset.svdel) apagarGuardado(b.dataset.svdel);
   else if (b.dataset.svren) renomearConta();
 });
+$('rPrev').addEventListener('click', () => { state.recMonth = addMonths(state.recMonth, -1); renderReceber(); });
+$('rNext').addEventListener('click', () => { state.recMonth = addMonths(state.recMonth, 1); renderReceber(); });
+$('rFilter').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; state.recFilter = b.dataset.f; renderReceber(); });
+$('tab-receber').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.rpay) togglePago(b.dataset.rpay, b.dataset.oid);
+  else if (b.dataset.rall) marcarTodas(b.dataset.rall);
+  else if (b.dataset.rren) renomearPessoa(b.dataset.rren);
+});
 $('histView').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
-  const ord = ['sobra', 'gastos', 'ambos'], i = ord.indexOf(state.histView);
+  const ord = ['sobra', 'gastos', 'ambos', 'guardado'], i = ord.indexOf(state.histView);
   state.histView = ord[(i + (+b.dataset.step) + ord.length) % ord.length];
   try { localStorage.setItem('financas_histView', state.histView); } catch (e) {}
   renderHist();
